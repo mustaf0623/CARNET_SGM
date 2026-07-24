@@ -780,7 +780,7 @@ function render() {
           </div>
           <button class="edit-name-btn" id="editNameBtn">modifier</button>
         </div>
-        ${sb && sbUser ? `<button class="edit-name-btn signOutBtn" id="signOutBtn" style="margin-top:8px;">se déconnecter</button>` : ''}
+        <button class="edit-name-btn signOutBtn" id="signOutBtn" style="margin-top:8px;">${sb && sbUser ? 'se déconnecter' : 'se connecter'}</button>
       </div>
     </aside>
     <main><div class="view" id="view">${renderTab()}</div></main>
@@ -924,7 +924,13 @@ function attachShellEvents() {
   const editBtn = document.getElementById('editNameBtn');
   if (editBtn) editBtn.addEventListener('click', renameSignataire);
   const signOutBtn = document.getElementById('signOutBtn');
-  if (signOutBtn) signOutBtn.addEventListener('click', signOutSupabase);
+  if (signOutBtn) signOutBtn.addEventListener('click', () => {
+    if (sb && sbUser) {
+      signOutSupabase();
+    } else {
+      renderAuthScreen();
+    }
+  });
 }
 
 /* ================= ONBOARDING ================= */
