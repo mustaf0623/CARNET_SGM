@@ -606,6 +606,40 @@ async function saveData() {
   if (sb && sbUser) pushToSupabase();
 }
 
+async function resetAppData() {
+  const keepName = state.data?.profile?.name || '';
+  state.data = emptyData();
+  state.data.profile.name = keepName;
+  state.tab = 'dashboard';
+  state.dashProgFilter = 'global';
+  state.dashYearFilter = 'toutes';
+  state.pointageProgId = null;
+  state.pointageSessionId = 'new';
+  state.pointageDate = todayISO();
+  state.pointageLabel = '';
+  state.pointageFastMode = true;
+  state.importStep = 0;
+  state.importRows = [];
+  state.importHeaders = [];
+  state.importMapping = {};
+  state.renameModalOpen = false;
+  state.confirmModalOpen = false;
+  state.memberDetailId = null;
+  state.reportScope = 'global';
+  state.reportSessionId = 'toutes';
+  pendingConfirmAction = null;
+  snapshotMaps.programmes = new Map();
+  snapshotMaps.membres = new Map();
+  snapshotMaps.sessions = new Map();
+  snapshotMaps.pointages = new Map();
+
+  try { await idbDelete('carnet-data'); } catch (e) { /* noop */ }
+  try { await idbSet('carnet-data', state.data); } catch (e) { /* noop */ }
+
+  render();
+  showToast('Données locales réinitialisées');
+}
+
 function showToast(msg, icon) {
   const t = document.getElementById('toast');
   t.innerHTML = (icon || '') + '<span>' + msg + '</span>';
@@ -1527,14 +1561,9 @@ function attachMembresEvents() {
   if (resetBtn) resetBtn.addEventListener('click', () => {
     openConfirm(
       'Réinitialiser toutes les données ?',
-      'Programmes, membres, séances et pointages seront définitivement supprimés. Cette action est irréversible.',
+      'Programmes, membres, séances et pointages seront définitivement supprimés sur cet appareil. Cette action est irréversible et n’affecte pas les données partagées sur les autres appareils.',
       async () => {
-        const name = state.data.profile.name;
-        state.data = emptyData();
-        state.data.profile.name = name;
-        state.dashProgFilter = 'global'; state.dashYearFilter = 'toutes';
-        state.pointageProgId = null; state.pointageSessionId = 'new';
-        await saveData(); showToast('Données réinitialisées'); render();
+        await resetAppData();
       },
       'Réinitialiser'
     );
@@ -2095,6 +2124,7 @@ document.getElementById('syncBtn').addEventListener('click', () => reconcileSync
 (async function init() {
   const minSplash = new Promise(res => setTimeout(res, 1250));
   const localData = await loadData(); // toujours essayé en premier, indépendamment de Supabase
+  const shouldForceAuthOnFirstLaunch = !localData && supabaseConfigured();
 
   if (supabaseConfigured() && window.supabase) {
     const syncBtnEl = document.getElementById('syncBtn');
@@ -2140,9 +2170,12 @@ document.getElementById('syncBtn').addEventListener('click', () => reconcileSync
     return;
   }
 
-  // Aucune donnée locale (tout premier lancement sur cet appareil) : il faut
-  // être connecté pour récupérer le jeu de données initial.
-  if (sb && !sbUser) { renderAuthScreen(); return; }
+  // Aucune donnée locale (tout premier lancement sur cet appareil) : on
+  // affiche l’écran de connexion pour permettre l’accès au jeu de données.
+  if (shouldForceAuthOnFirstLaunch || (sb && !sbUser)) {
+    renderAuthScreen();
+    return;
+  }
   await startApp();
 })();
 </script>
