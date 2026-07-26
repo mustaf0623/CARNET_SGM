@@ -501,8 +501,8 @@ async function pullFromSupabase() {
     sb.from('profiles').select('*').eq('id', sbUser.id).maybeSingle(),
   ]);
   if (progRes.error) throw progRes.error;
-  const programmes = (progRes.data || []).map(r => ({ id: r.id, nom: r.nom }));
-  const membres = (memRes.data || []).map(r => ({ id: r.id, nom: r.nom, prenom: r.prenom, sexe: r.sexe, programmeIds: r.programme_ids || [], allProgrammes: !!r.all_programmes, ap: !!r.ap, extra: r.extra || {} }));
+  const programmes = (progRes.data || []).map(r => ({ id: r.id, nom: r.nom, prioriteCategories: r.priorite_categories || [] }));
+  const membres = (memRes.data || []).map(r => ({ id: r.id, nom: r.nom, prenom: r.prenom, sexe: r.sexe, categorie: r.categorie || '', programmeIds: r.programme_ids || [], allProgrammes: !!r.all_programmes, ap: !!r.ap, extra: r.extra || {} }));
   const sessions = (sessRes.data || []).map(r => ({ id: r.id, programmeId: r.programme_id, date: r.date, label: r.label }));
   const pointages = (ptRes.data || []).map(r => ({ id: r.id, sessionId: r.session_id, membreId: r.membre_id, statut: r.statut }));
   const name = (profRes.data && profRes.data.name) || '';
@@ -527,8 +527,8 @@ async function pushToSupabase() {
   if (syncing) { syncQueued = true; return false; }
   syncing = true;
   try {
-    snapshotMaps.programmes = await syncTable('programmes', state.data.programmes, p => ({ id: p.id, nom: p.nom }), snapshotMaps.programmes);
-    snapshotMaps.membres = await syncTable('membres', state.data.membres, m => ({ id: m.id, nom: m.nom, prenom: m.prenom, sexe: m.sexe, programme_ids: m.programmeIds || [], all_programmes: !!m.allProgrammes, ap: !!m.ap, extra: m.extra || {} }), snapshotMaps.membres);
+    snapshotMaps.programmes = await syncTable('programmes', state.data.programmes, p => ({ id: p.id, nom: p.nom, priorite_categories: p.prioriteCategories || [] }), snapshotMaps.programmes);
+    snapshotMaps.membres = await syncTable('membres', state.data.membres, m => ({ id: m.id, nom: m.nom, prenom: m.prenom, sexe: m.sexe, categorie: m.categorie || '', programme_ids: m.programmeIds || [], all_programmes: !!m.allProgrammes, ap: !!m.ap, extra: m.extra || {} }), snapshotMaps.membres);
     snapshotMaps.sessions = await syncTable('sessions', state.data.sessions, s => ({ id: s.id, programme_id: s.programmeId, date: s.date, label: s.label }), snapshotMaps.sessions);
     snapshotMaps.pointages = await syncTable('pointages', state.data.pointages, p => ({ id: p.id, session_id: p.sessionId, membre_id: p.membreId, statut: p.statut }), snapshotMaps.pointages);
     try { await sb.from('profiles').upsert({ id: sbUser.id, name: state.data.profile.name }); } catch (e) { /* non bloquant */ }
@@ -709,6 +709,16 @@ function extraFieldKeys(data) {
 function memberInProgramme(m, progId) {
   return !!m.allProgrammes || m.programmeIds.includes(progId);
 }
+// Un programme est "prioritaire" pour une catégorie s'il n'a aucune priorité
+// définie (comportement par défaut, inchangé) OU si cette catégorie figure
+// explicitement dans sa liste. Si le membre n'a pas de catégorie connue,
+// on ne peut pas appliquer d'exemption : ses absences comptent normalement.
+function isPriorityProgram(programme, categorie) {
+  const prio = programme && programme.prioriteCategories;
+  if (!prio || !prio.length) return true;
+  if (!categorie) return true;
+  return prio.includes(categorie);
+}
 
 // Un membre "Ponctuel (AP)" est intégré définitivement à la base dès qu'il a été
 // pointé (présent ou absent) à plus de 6 séances réparties sur au moins 3 programmes.
@@ -736,7 +746,11 @@ function memberStats(data, membreId, yearFilter) {
     let sessions = data.sessions.filter(s => s.programmeId === p.id);
     if (yearFilter !== 'toutes') sessions = sessions.filter(s => periodMatches(s.date, yearFilter));
     const sessionIds = sessions.map(s => s.id);
-    const pts = data.pointages.filter(pt => pt.membreId === membreId && sessionIds.includes(pt.sessionId));
+    let pts = data.pointages.filter(pt => pt.membreId === membreId && sessionIds.includes(pt.sessionId));
+    // Une absence sur un programme non prioritaire pour la catégorie du
+    // membre n'est pas comptabilisée — comme si le membre n'avait pas été
+    // pointé sur cette séance. Une présence compte toujours normalement.
+    pts = pts.filter(pt => pt.statut === 'present' || isPriorityProgram(p, m.categorie));
     const present = pts.filter(pt => pt.statut === 'present').length;
     const absent = pts.filter(pt => pt.statut === 'absent').length;
     const total = present + absent;
@@ -755,9 +769,15 @@ function memberStats(data, membreId, yearFilter) {
 
 function programStats(data, progId, yearFilter) {
   yearFilter = yearFilter || 'toutes';
+  const programme = data.programmes.find(p => p.id === progId);
   const sessions = data.sessions.filter(s => s.programmeId === progId && periodMatches(s.date, yearFilter));
   const sessionIds = sessions.map(s => s.id);
-  const pts = data.pointages.filter(p => sessionIds.includes(p.sessionId));
+  let pts = data.pointages.filter(p => sessionIds.includes(p.sessionId));
+  pts = pts.filter(p => {
+    if (p.statut === 'present') return true;
+    const mem = data.membres.find(m => m.id === p.membreId);
+    return isPriorityProgram(programme, mem && mem.categorie);
+  });
   const present = pts.filter(p => p.statut === 'present').length;
   const total = pts.length;
   const tauxPresence = total ? Math.round((present / total) * 100) : 0;
@@ -770,13 +790,18 @@ function programStats(data, progId, yearFilter) {
 // (une présence remet la série à zéro ; une séance non pointée pour ce
 // membre est ignorée — elle ne casse ni ne compte dans la série).
 function consecutiveAbsenceStreak(data, membreId, progId) {
+  const m = data.membres.find(x => x.id === membreId);
+  const programme = data.programmes.find(p => p.id === progId);
   const sessions = data.sessions.filter(s => s.programmeId === progId).sort((a, b) => a.date.localeCompare(b.date));
   let streak = 0;
   let lastDate = null;
   sessions.forEach(s => {
     const pt = data.pointages.find(p => p.sessionId === s.id && p.membreId === membreId);
     if (!pt) return;
-    if (pt.statut === 'absent') { streak++; lastDate = s.date; }
+    if (pt.statut === 'absent') {
+      if (!isPriorityProgram(programme, m && m.categorie)) return; // absence non comptabilisée pour ce membre
+      streak++; lastDate = s.date;
+    }
     else { streak = 0; lastDate = null; }
   });
   return { streak, lastDate };
@@ -797,7 +822,14 @@ function absenceWatchlist(data, seuil) {
   return rows;
 }
 function sessionStats(data, sessionId) {
-  const pts = data.pointages.filter(p => p.sessionId === sessionId);
+  const session = data.sessions.find(s => s.id === sessionId);
+  const programme = session && data.programmes.find(p => p.id === session.programmeId);
+  let pts = data.pointages.filter(p => p.sessionId === sessionId);
+  pts = pts.filter(p => {
+    if (p.statut === 'present') return true;
+    const mem = data.membres.find(m => m.id === p.membreId);
+    return isPriorityProgram(programme, mem && mem.categorie);
+  });
   const present = pts.filter(p => p.statut === 'present').length;
   const total = pts.length;
   return { present, total, tauxPresence: total ? Math.round((present / total) * 100) : 0 };
@@ -812,7 +844,15 @@ function scopedStats(data, progFilter, yearFilter) {
   let sessions = progFilter === 'global' ? data.sessions : data.sessions.filter(s => s.programmeId === progFilter);
   if (yearFilter !== 'toutes') sessions = sessions.filter(s => periodMatches(s.date, yearFilter));
   const sessionIds = sessions.map(s => s.id);
-  const pts = data.pointages.filter(p => sessionIds.includes(p.sessionId));
+  const sessionById = new Map(sessions.map(s => [s.id, s]));
+  let pts = data.pointages.filter(p => sessionIds.includes(p.sessionId));
+  pts = pts.filter(p => {
+    if (p.statut === 'present') return true;
+    const sess = sessionById.get(p.sessionId);
+    const programme = sess && data.programmes.find(pr => pr.id === sess.programmeId);
+    const mem = data.membres.find(m => m.id === p.membreId);
+    return isPriorityProgram(programme, mem && mem.categorie);
+  });
   const present = pts.filter(p => p.statut === 'present').length;
   const tauxPresence = pts.length ? Math.round((present / pts.length) * 100) : 0;
   return { nbH, nbF, total, tauxPresence, tauxAbsence: 100 - tauxPresence };
@@ -921,7 +961,7 @@ function renderMemberDetailModal() {
         <div class="avatar" style="width:44px;height:44px;font-size:16px;">${initials(m.nom, m.prenom)}</div>
         <div>
           <h2 style="margin:0;">${escapeHtml(m.prenom)} ${escapeHtml(m.nom)}</h2>
-          <div style="font-size:12.5px;color:var(--ink-faint);">${m.sexe === 'H' ? 'Homme' : 'Femme'}${m.allProgrammes ? ' · Tous les programmes' : ''}</div>
+          <div style="font-size:12.5px;color:var(--ink-faint);">${m.sexe === 'H' ? 'Homme' : 'Femme'}${m.categorie ? ' · Catégorie : ' + escapeHtml(m.categorie) : ''}${m.allProgrammes ? ' · Tous les programmes' : ''}</div>
         </div>
         <select id="memberDetailYear" style="margin-left:auto;min-width:130px;">${yearOptions}</select>
       </div>
@@ -1386,7 +1426,7 @@ function memberRow(m, statut, fastMode) {
   return `<div class="member-row" data-membre="${m.id}">
     <div class="member-avatar">${initials(m.nom, m.prenom)}</div>
     <div class="member-info">
-      <div class="member-name">${escapeHtml(m.prenom)} ${escapeHtml(m.nom)}${m.ap ? ` <span class="pill" style="background:var(--gold-tint);border-color:var(--gold);color:var(--gold);font-size:10px;">AP</span>` : ''}</div>
+      <button type="button" class="member-name-link" data-id="${m.id}" style="background:none;border:none;padding:0;font-size:13.5px;font-weight:700;color:var(--ink);cursor:pointer;text-decoration:underline;text-decoration-color:var(--line-strong);text-align:left;">${escapeHtml(m.prenom)} ${escapeHtml(m.nom)}</button>${m.ap ? ` <span class="pill" style="background:var(--gold-tint);border-color:var(--gold);color:var(--gold);font-size:10px;">AP</span>` : ''}
       <div class="member-meta">${m.sexe === 'H' ? 'Homme' : 'Femme'}</div>
     </div>
     ${statusHtml}
@@ -1420,6 +1460,11 @@ function attachPointageEvents() {
       }
     );
   });
+
+  document.querySelectorAll('.member-name-link').forEach(btn => btn.addEventListener('click', () => {
+    state.memberDetailId = btn.dataset.id;
+    render();
+  }));
 
   document.querySelectorAll('.status-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1492,7 +1537,22 @@ function renderMembres() {
       <div class="card">
         <h3 class="card-title">Programmes</h3>
         <div class="card-sub">${d.programmes.length} programme${d.programmes.length > 1 ? 's' : ''}</div>
-        <div class="ledger">${d.programmes.map(p => `<div class="ledger-row"><div class="prog-name">${escapeHtml(p.nom)}</div><div style="color:var(--ink-faint);font-size:12px;" class="mono">${d.membres.filter(m => memberInProgramme(m, p.id)).length} membres</div><button class="edit-name-btn delete-prog-btn" data-id="${p.id}" style="color:var(--terracotta);">supprimer</button></div>`).join('') || emptyRow('Aucun programme pour l’instant.')}</div>
+        <div class="ledger">${d.programmes.map(p => {
+          const prio = p.prioriteCategories || [];
+          const cats = ['Homme', 'Femme', 'Cadet', 'Cadette'];
+          return `<div class="ledger-row" style="flex-direction:column;align-items:stretch;gap:8px;">
+            <div style="display:flex;align-items:center;gap:14px;">
+              <div class="prog-name" style="flex:1;">${escapeHtml(p.nom)}</div>
+              <div style="color:var(--ink-faint);font-size:12px;" class="mono">${d.membres.filter(m => memberInProgramme(m, p.id)).length} membres</div>
+              <button class="edit-name-btn delete-prog-btn" data-id="${p.id}" style="color:var(--terracotta);">supprimer</button>
+            </div>
+            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:11.5px;color:var(--ink-faint);">
+              <span>Prioritaire pour :</span>
+              ${cats.map(c => `<label style="display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" class="progPrioCheckbox" data-prog="${p.id}" data-cat="${c}" ${prio.includes(c) ? 'checked' : ''}>${c}</label>`).join('')}
+              ${!prio.length ? `<span style="font-style:italic;">— aucune coché : absences comptées pour tous, comme avant —</span>` : ''}
+            </div>
+          </div>`;
+        }).join('') || emptyRow('Aucun programme pour l’instant.')}</div>
         <div style="display:flex;gap:8px;margin-top:16px;">
           <input type="text" id="newProgName" placeholder="Nom du nouveau programme" style="flex:1;">
           <button class="btn btn-primary btn-sm" id="addProgBtn">${ICONS.plus} Ajouter</button>
@@ -1506,6 +1566,17 @@ function renderMembres() {
         <div class="field" style="margin-bottom:10px;">
           <label>Sexe</label>
           <select id="newSexe" style="width:100%;"><option value="H">Homme</option><option value="F">Femme</option></select>
+        </div>
+        <div class="field" style="margin-bottom:10px;">
+          <label>Catégorie</label>
+          <select id="newCategorie" style="width:100%;">
+            <option value="">Non définie</option>
+            <option value="Homme">Homme</option>
+            <option value="Femme">Femme</option>
+            <option value="Cadet">Cadet</option>
+            <option value="Cadette">Cadette</option>
+          </select>
+          <div style="font-size:11px;color:var(--ink-faint);margin-top:4px;">Détermine, avec les priorités définies par programme, si une absence de ce membre est comptabilisée.</div>
         </div>
         <div class="field" style="margin-bottom:14px;">
           <label>Type de membre</label>
@@ -1585,7 +1656,7 @@ function renderImportZone() {
   if (state.importStep === 1) {
     const expected = [
       { key: 'prenom', label: 'Prénom' }, { key: 'nom', label: 'Nom' },
-      { key: 'sexe', label: 'Sexe' },
+      { key: 'sexe', label: 'Sexe' }, { key: 'categorie', label: 'Catégorie' },
     ];
     return `<div>
       <p style="font-size:13px;color:var(--ink-dim);margin-bottom:14px;">${state.importRows.length} lignes détectées. Vérifiez la correspondance des colonnes avant l’import.</p>
@@ -1597,6 +1668,7 @@ function renderImportZone() {
           ${state.importHeaders.map(h => `<option value="${escapeHtml(h)}" ${state.importMapping[f.key] === h ? 'selected' : ''}>${escapeHtml(h)}</option>`).join('')}
         </select>
       </div>`).join('')}
+      <p style="font-size:11.5px;color:var(--ink-faint);margin-top:6px;">Catégorie attendue : Homme / Femme / Cadet / Cadette. Sert à définir, par programme, quelles catégories ont ce programme comme prioritaire pour le calcul des absences.</p>
       <p style="font-size:12px;color:var(--ink-faint);line-height:1.6;margin-top:14px;">Une fois importés, ces membres seront pointables dans tous les programmes déjà créés — et automatiquement dans ceux que vous créerez plus tard.</p>
       <div style="display:flex;gap:10px;margin-top:14px;">
         <button class="btn btn-primary" id="confirmImportBtn">Importer</button>
@@ -1614,12 +1686,23 @@ function guessMapping(headers) {
     prenom: ['prenom', 'firstname', 'first name'],
     nom: ['nom', 'lastname', 'last name', 'nom de famille'],
     sexe: ['sexe', 'genre', 'gender'],
+    categorie: ['categorie', 'category', 'classe'],
   };
   Object.entries(dict).forEach(([key, aliases]) => {
     const found = headers.find(h => aliases.includes(norm(h)));
     if (found) map[key] = found;
   });
   return map;
+}
+// Normalise une valeur brute de catégorie vers Homme/Femme/Cadet/Cadette.
+function normaliseCategorie(raw) {
+  const v = String(raw || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (!v) return '';
+  if (['cadette', 'cadettes'].includes(v)) return 'Cadette';
+  if (['cadet', 'cadets'].includes(v)) return 'Cadet';
+  if (['femme', 'femmes', 'f', 'w', 'female'].includes(v)) return 'Femme';
+  if (['homme', 'hommes', 'h', 'm', 'male'].includes(v)) return 'Homme';
+  return '';
 }
 
 function attachMembresEvents() {
@@ -1668,6 +1751,7 @@ function attachMembresEvents() {
     const prenom = document.getElementById('newPrenom').value.trim();
     const nom = document.getElementById('newNom').value.trim();
     const sexe = document.getElementById('newSexe').value;
+    const categorie = document.getElementById('newCategorie').value;
     if (!nom || !prenom) { showToast('Nom et prénom requis'); return; }
     const apBtn = document.querySelector('#newMembreType .status-btn.active');
     const ap = !!(apBtn && apBtn.dataset.ap === '1');
@@ -1682,8 +1766,8 @@ function attachMembresEvents() {
       });
     }
     const membre = ap
-      ? { id: uid(), nom, prenom, sexe, programmeIds: Array.from(selectedProgs), allProgrammes: false, ap: true, extra }
-      : { id: uid(), nom, prenom, sexe, programmeIds: [], allProgrammes: true, ap: false, extra };
+      ? { id: uid(), nom, prenom, sexe, categorie, programmeIds: Array.from(selectedProgs), allProgrammes: false, ap: true, extra }
+      : { id: uid(), nom, prenom, sexe, categorie, programmeIds: [], allProgrammes: true, ap: false, extra };
     d.membres.push(membre);
     await saveData(); showToast(ap ? 'Membre ponctuel ajouté (AP)' : 'Membre ajouté — pointable dans tous les programmes'); render();
   });
@@ -1702,6 +1786,16 @@ function attachMembresEvents() {
 
   const emptyGo = document.getElementById('emptyGoMembres');
   if (emptyGo) emptyGo.addEventListener('click', () => { state.tab = 'membres'; render(); });
+
+  document.querySelectorAll('.progPrioCheckbox').forEach(cb => cb.addEventListener('change', async () => {
+    const prog = d.programmes.find(p => p.id === cb.dataset.prog);
+    if (!prog) return;
+    const set = new Set(prog.prioriteCategories || []);
+    if (cb.checked) set.add(cb.dataset.cat); else set.delete(cb.dataset.cat);
+    prog.prioriteCategories = Array.from(set);
+    await saveData();
+    render();
+  }));
 
   document.querySelectorAll('.delete-prog-btn').forEach(btn => btn.addEventListener('click', () => {
     const prog = d.programmes.find(p => p.id === btn.dataset.id);
@@ -1782,6 +1876,7 @@ async function confirmImport() {
     if (!nom && !prenom) return;
     let sexeRaw = (map.sexe ? String(row[map.sexe]) : '').trim().toLowerCase();
     const sexe = ['f', 'femme', 'female', 'w'].includes(sexeRaw) ? 'F' : 'H';
+    const categorie = normaliseCategorie(map.categorie ? row[map.categorie] : '');
     const extra = {};
     Object.keys(row).forEach(h => {
       if (mappedHeaders.has(h)) return;
@@ -1789,7 +1884,7 @@ async function confirmImport() {
       if (v === undefined || v === null || String(v).trim() === '') return;
       extra[h] = String(v).trim();
     });
-    d.membres.push({ id: uid(), nom: String(nom).trim(), prenom: String(prenom).trim(), sexe, programmeIds: [], allProgrammes: true, extra });
+    d.membres.push({ id: uid(), nom: String(nom).trim(), prenom: String(prenom).trim(), sexe, categorie, programmeIds: [], allProgrammes: true, extra });
     created++;
   });
 
@@ -2215,14 +2310,29 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', async () => {
     try {
       const registration = await navigator.serviceWorker.register('./sw.js');
+      const notifyUpdate = () => {
+        if (document.getElementById('swUpdateBanner')) return;
+        const banner = document.createElement('div');
+        banner.id = 'swUpdateBanner';
+        banner.style.cssText = 'position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:9999;background:var(--ink);color:var(--paper);padding:11px 12px 11px 16px;border-radius:999px;display:flex;align-items:center;gap:10px;font-size:12.5px;font-weight:600;box-shadow:0 8px 24px rgba(0,0,0,0.25);';
+        banner.innerHTML = '<span>Nouvelle version disponible</span><button id="swUpdateReloadBtn" style="background:var(--paper);color:var(--ink);border:none;border-radius:999px;padding:6px 13px;font-weight:700;cursor:pointer;font-size:12.5px;">Recharger</button>';
+        document.body.appendChild(banner);
+        document.getElementById('swUpdateReloadBtn').addEventListener('click', () => window.location.reload());
+      };
       registration.addEventListener('updatefound', () => {
         const newWorker = registration.installing;
         newWorker.addEventListener('statechange', () => {
           if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-            showToast('Nouvelle version disponible — rechargez la page');
+            notifyUpdate();
           }
         });
       });
+      // Mobile ne revérifie pas toujours spontanément le sw.js : on force la
+      // vérification à chaque retour au premier plan, et périodiquement.
+      document.addEventListener('visibilitychange', () => {
+        if (!document.hidden) registration.update().catch(() => {});
+      });
+      setInterval(() => registration.update().catch(() => {}), 60 * 60 * 1000);
     } catch (err) { /* pas grave hors ligne au premier chargement */ }
   });
 }
