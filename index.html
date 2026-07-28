@@ -1749,8 +1749,8 @@ function renderMembres() {
       <h3 class="card-title" style="color:var(--terracotta-dim);">Zone sensible</h3>
       <div class="card-sub">Réinitialise entièrement l’application : programmes, membres, séances et pointages. Votre nom de signataire est conservé.</div>
       <button class="btn" id="resetAllBtn" style="background:var(--terracotta);border-color:transparent;color:#fff;">Réinitialiser toutes les données</button>
-      <div class="card-sub" style="margin-top:16px;">Supprime uniquement les informations importées (base importée) de tous les membres — les membres eux-mêmes, leurs programmes et leur historique de pointage restent intacts.</div>
-      <button class="btn btn-ghost" id="clearImportedDataBtn" style="border-color:var(--terracotta);color:var(--terracotta-dim);">Supprimer toute la base importée</button>
+      <div class="card-sub" style="margin-top:16px;">Supprime tous les membres (permanents et ponctuels) et leurs pointages associés — retour à zéro membre, comme s’il n’y avait jamais eu d’import. Les programmes et les séances restent intacts.</div>
+      <button class="btn btn-ghost" id="clearImportedDataBtn" style="border-color:var(--terracotta);color:var(--terracotta-dim);">Supprimer tous les membres</button>
     </div>
   `;
 }
@@ -1981,15 +1981,17 @@ function attachMembresEvents() {
 
   const clearImportedBtn = document.getElementById('clearImportedDataBtn');
   if (clearImportedBtn) clearImportedBtn.addEventListener('click', () => {
-    const count = d.membres.filter(m => m.extra && Object.keys(m.extra).length).length;
-    if (!count) { showToast('Aucune information importée à supprimer'); return; }
+    const count = d.membres.length;
+    if (!count) { showToast('Aucun membre à supprimer'); return; }
     openConfirm(
-      'Supprimer toute la base importée ?',
-      `Les informations complémentaires (base importée) de ${count} membre${count > 1 ? 's' : ''} seront définitivement effacées, sur tous les appareils synchronisés. Les membres, leurs programmes et leur historique de pointage restent intacts.`,
+      'Supprimer tous les membres ?',
+      `${count} membre${count > 1 ? 's' : ''} et tous les pointages associés seront définitivement supprimés, sur tous les appareils synchronisés. Les programmes et les séances restent intacts. Cette action est irréversible.`,
       async () => {
-        d.membres.forEach(m => { m.extra = {}; });
+        const membreIds = new Set(d.membres.map(m => m.id));
+        d.pointages = d.pointages.filter(p => !membreIds.has(p.membreId));
+        d.membres = [];
         await saveData();
-        showToast('Base importée supprimée');
+        showToast('Tous les membres ont été supprimés');
       },
       'Supprimer'
     );
