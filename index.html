@@ -666,6 +666,7 @@ let state = {
   bureauMandatId: null,
   bureauReunionId: null,
   bureauMemberDetailMembreId: null,
+  bureauReunionSearch: '',
   dashProgFilter: 'global',
   dashYearFilter: 'toutes',
   pointageProgId: null,
@@ -2850,7 +2851,15 @@ function renderBureauMembres(d, mandat) {
 
 function renderBureauReunions(d, mandat) {
   if (!mandat) return emptyRow('Créez d’abord un mandat dans l’onglet « Mandats ».');
-  const reunions = d.bureauReunions.filter(r => r.mandatId === mandat.id).sort((a, b) => b.numero - a.numero);
+  const allReunions = d.bureauReunions.filter(r => r.mandatId === mandat.id).sort((a, b) => b.numero - a.numero);
+  const q = (state.bureauReunionSearch || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const reunions = q ? allReunions.filter(r =>
+    norm('reunion n' + r.numero + ' ' + r.numero).includes(q) ||
+    norm(fmtDate(r.date)).includes(q) ||
+    norm(r.date).includes(q) ||
+    norm(r.ordreDuJour).includes(q)
+  ) : allReunions;
   const hasMembres = bureauMembresForMandat(d, mandat.id).length > 0;
   return `
     <div class="card">
@@ -2858,11 +2867,12 @@ function renderBureauReunions(d, mandat) {
       ${!hasMembres ? `<div class="card-sub" style="color:var(--terracotta-dim);">Ajoutez d’abord des membres au Bureau (onglet « Membres du Bureau ») pour pouvoir créer une réunion.</div>` : ''}
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center;">
         <input type="date" id="newReunionDate" value="${todayISO()}">
-        <input type="text" id="newReunionOdj" placeholder="Ordre du jour (optionnel)" style="flex:1;min-width:160px;">
+        <input type="text" id="newReunionOdj" placeholder="Ordre du jour" style="flex:1;min-width:160px;">
         <button class="btn btn-primary" id="addReunionBtn" ${hasMembres ? '' : 'disabled'}>Nouvelle réunion (n°${nextReunionNumero(d, mandat.id)})</button>
       </div>
+      ${allReunions.length > 5 ? `<div style="margin-top:14px;"><input type="text" id="bureauReunionSearch" placeholder="Rechercher une réunion (numéro, date, ordre du jour...)" value="${escapeHtml(state.bureauReunionSearch || '')}" style="width:100%;"></div>` : ''}
       <div class="ledger" style="margin-top:14px;">
-        ${reunions.map(r => {
+        ${(allReunions.length && !reunions.length) ? emptyRow('Aucune réunion ne correspond à cette recherche.') : reunions.map(r => {
           const pts = (d.bureauPointages || []).filter(p => p.reunionId === r.id);
           const extraPresents = (d.bureauPresenceExtras || []).filter(x => x.reunionId === r.id && x.statut === 'present').length;
           const present = pts.filter(p => p.statut === 'present').length + extraPresents;
@@ -3031,6 +3041,15 @@ function attachBureauEvents() {
   document.querySelectorAll('.bureau-stats-member-link').forEach(btn => btn.addEventListener('click', () => {
     state.bureauMemberDetailMembreId = btn.dataset.id; render();
   }));
+
+  const bureauReunionSearch = document.getElementById('bureauReunionSearch');
+  if (bureauReunionSearch) bureauReunionSearch.addEventListener('input', e => {
+    state.bureauReunionSearch = e.target.value;
+    const pos = e.target.selectionStart;
+    render();
+    const again = document.getElementById('bureauReunionSearch');
+    if (again) { again.focus(); again.setSelectionRange(pos, pos); }
+  });
 
   // ---- Mandats ----
   const addMandatBtn = document.getElementById('addMandatBtn');
