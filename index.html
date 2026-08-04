@@ -63,6 +63,11 @@
   }
   *{box-sizing:border-box;}
   html,body{height:100%;}
+  /* Réserve toujours la place de la barre de défilement : sans ça, elle
+     apparaît/disparaît selon la hauteur de chaque onglet et décale toute
+     la mise en page (dont la barre latérale) de quelques pixels à chaque
+     changement d'onglet. */
+  html{ overflow-y:scroll; scrollbar-gutter:stable; }
   html{ background:var(--paper); }
   body{
     margin:0;
@@ -794,6 +799,18 @@ function extraFieldKeys(data) {
   data.membres.forEach(m => Object.keys(m.extra || {}).forEach(k => keys.add(k)));
   return Array.from(keys);
 }
+function getMemberContactInfo(membre) {
+  if (!membre) return '';
+  // Le contact n'est jamais une propriété directe du membre — il vient soit
+  // du champ "Contact" saisi à l'ajout d'un AP, soit d'une colonne importée
+  // (nom de colonne variable selon le fichier source). On cherche dans les
+  // deux, en tolérant plusieurs libellés courants.
+  const extra = membre.extra || {};
+  const wantedKeys = ['contact', 'telephone', 'téléphone', 'tel', 'phone', 'mobile', 'numero', 'numéro', 'email', 'mail', 'e-mail'];
+  const matchKey = Object.keys(extra).find(k => wantedKeys.some(w => k.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').includes(w.normalize('NFD').replace(/[\u0300-\u036f]/g, ''))));
+  const value = matchKey ? extra[matchKey] : '';
+  return value ? String(value).trim() : '';
+}
 function memberInProgramme(m, progId) {
   return !!m.allProgrammes || m.programmeIds.includes(progId);
 }
@@ -1210,9 +1227,9 @@ function renderMemberDetailModal() {
   </div>`;
 }
 function attachMemberDetailModal() {
-  document.getElementById('memberDetailCloseBtn').addEventListener('click', () => { state.memberDetailId = null; render(); });
+  document.getElementById('memberDetailCloseBtn')?.addEventListener('click', () => { state.memberDetailId = null; render(); });
   document.getElementById('memberDetailCloseFixedBtn')?.addEventListener('click', () => { state.memberDetailId = null; render(); });
-  document.getElementById('memberDetailOverlay').addEventListener('click', (e) => { if (e.target.id === 'memberDetailOverlay') { state.memberDetailId = null; render(); } });
+  document.getElementById('memberDetailOverlay')?.addEventListener('click', (e) => { if (e.target.id === 'memberDetailOverlay') { state.memberDetailId = null; render(); } });
   const yearSel = document.getElementById('memberDetailYear');
   if (yearSel) yearSel.addEventListener('change', e => { state.dashYearFilter = e.target.value; render(); });
 
@@ -1223,17 +1240,14 @@ function attachMemberDetailModal() {
   });
   const addFieldBtn = document.getElementById('extraInfoAddFieldBtn');
   if (addFieldBtn) addFieldBtn.addEventListener('click', () => {
-    const key = (prompt('Nom du nouveau champ (ex : Téléphone, Matricule...)') || '').trim();
-    if (!key) return;
-    if (grid.querySelector(`.extra-info-item[data-key="${CSS.escape(key)}"]`)) { showToast('Ce champ existe déjà'); return; }
     const placeholder = grid.querySelector('div[style*="grid-column"]');
     if (placeholder) placeholder.remove();
     const item = document.createElement('div');
     item.className = 'extra-info-item';
-    item.dataset.key = key;
-    item.innerHTML = `<label>${escapeHtml(key)}</label><div class="extra-info-row"><input type="text" class="extraInfoValueInput"><button type="button" class="extra-info-remove" title="Supprimer ce champ">×</button></div>`;
-    grid.appendChild(item);
-    item.querySelector('input').focus();
+    item.dataset.key = '';
+    item.innerHTML = `<input type="text" class="extraInfoKeyInput" placeholder="Nom du champ" style="font-size:10.5px;font-weight:700;padding:4px 6px;margin-bottom:3px;border:1px solid var(--line);border-radius:6px;background:var(--card);color:var(--ink-faint);width:100%;box-sizing:border-box;"><div class="extra-info-row"><input type="text" class="extraInfoValueInput" placeholder="Valeur"><button type="button" class="extra-info-remove" title="Supprimer ce champ">×</button></div>`;
+    grid.prepend(item);
+    item.querySelector('.extraInfoKeyInput').focus();
   });
   const saveBtn = document.getElementById('extraInfoSaveBtn');
   if (saveBtn) saveBtn.addEventListener('click', async () => {
@@ -1241,7 +1255,8 @@ function attachMemberDetailModal() {
     if (!m) return;
     const extra = {};
     grid.querySelectorAll('.extra-info-item').forEach(item => {
-      const key = item.dataset.key;
+      const keyInput = item.querySelector('.extraInfoKeyInput');
+      const key = keyInput ? keyInput.value.trim() : item.dataset.key;
       const v = item.querySelector('.extraInfoValueInput').value.trim();
       if (key && v) extra[key] = v;
     });
@@ -2824,7 +2839,10 @@ function renderBureauMembres(d, mandat) {
   const eligible = d.membres.filter(m => !m.ap && !assignedIds.has(m.id));
   return `
     <div class="card">
-      <h3 class="card-title">Membres du Bureau — ${escapeHtml(mandat.nom)}</h3>
+      <h3 class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
+        <span>Membres du Bureau — ${escapeHtml(mandat.nom)}</span>
+        <button class="btn btn-ghost btn-sm" id="exportBureauMembersBtn">Exporter en PDF</button>
+      </h3>
       <div class="card-sub">Seuls les membres permanents peuvent faire partie du Bureau.</div>
       ${!d.bureauPostes.length ? `<div style="font-size:11.5px;color:var(--terracotta-dim);margin-top:8px;">Définissez d’abord au moins un poste dans l’onglet « Postes ».</div>` : ''}
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
@@ -2876,9 +2894,11 @@ function renderBureauReunions(d, mandat) {
           const pts = (d.bureauPointages || []).filter(p => p.reunionId === r.id);
           const extraPresents = (d.bureauPresenceExtras || []).filter(x => x.reunionId === r.id && x.statut === 'present').length;
           const present = pts.filter(p => p.statut === 'present').length + extraPresents;
+          const odjLines = (r.ordreDuJour || '').split('\n').map(l => l.trim()).filter(Boolean);
+          const odjPreview = odjLines.length ? odjLines[0] + (odjLines.length > 1 ? ` (+${odjLines.length - 1} autre${odjLines.length > 2 ? 's' : ''} point${odjLines.length > 2 ? 's' : ''})` : '') : '';
           return `<div class="ledger-row" style="cursor:pointer;" data-open-reunion="${r.id}">
             <div style="flex:1;">
-              <div class="prog-name">Réunion n°${r.numero}${r.ordreDuJour ? ' — ' + escapeHtml(r.ordreDuJour) : ''}</div>
+              <div class="prog-name">Réunion n°${r.numero}${odjPreview ? ' — ' + escapeHtml(odjPreview) : ''}</div>
               <div style="font-size:11.5px;color:var(--ink-faint);">${fmtDate(r.date)} · ${present} présent(s) / ${pts.length + extraPresents} pointé(s)${r.pvTexte || r.pvLien ? ' · PV disponible' : ''}</div>
             </div>
             <button class="edit-name-btn delete-reunion-btn" data-id="${r.id}" style="color:var(--terracotta);">supprimer</button>
@@ -2899,9 +2919,11 @@ function renderBureauReunionDetail(d, mandat) {
     <div class="card">
       <button class="btn btn-ghost btn-sm" id="backToReunionsBtn">← Retour aux réunions</button>
       <h3 class="card-title" style="margin-top:12px;">Réunion n°${r.numero}</h3>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
-        <div class="field" style="flex:1;min-width:140px;"><label>Date</label><input type="date" id="reunionDateInput" value="${r.date}"></div>
-        <div class="field" style="flex:2;min-width:200px;"><label>Ordre du jour</label><input type="text" id="reunionOdjInput" value="${escapeHtml(r.ordreDuJour || '')}"></div>
+      <div class="field" style="margin-top:12px;max-width:220px;"><label>Date</label><input type="date" id="reunionDateInput" value="${r.date}"></div>
+      <div class="field" style="margin-top:10px;">
+        <label>Ordre du jour</label>
+        <textarea id="reunionOdjInput" placeholder="Un point par ligne…" style="width:100%;min-height:110px;padding:10px 12px;font-family:inherit;font-size:13.5px;line-height:1.7;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);">${escapeHtml(r.ordreDuJour || '')}</textarea>
+        <div style="font-size:11px;color:var(--ink-faint);margin-top:4px;">Chaque ligne devient un point distinct de l’ordre du jour, y compris dans le PDF.</div>
       </div>
       <button class="btn btn-ghost btn-sm" id="saveReunionInfoBtn" style="margin-top:6px;">Enregistrer la date / l’ordre du jour</button>
 
@@ -3269,6 +3291,14 @@ function attachBureauEvents() {
     showToast('Procès-verbal PDF généré');
   });
 
+  const exportMembersBtn = document.getElementById('exportBureauMembersBtn');
+  if (exportMembersBtn) exportMembersBtn.addEventListener('click', () => {
+    const mandat = activeBureauMandat(d);
+    if (!mandat) return;
+    buildBureauMembersPdf(mandat, d);
+    showToast('Liste des membres du Bureau exportée en PDF');
+  });
+
   const exportStatsBtn = document.getElementById('exportBureauStatsBtn');
   if (exportStatsBtn) exportStatsBtn.addEventListener('click', () => {
     const mandat = activeBureauMandat(d);
@@ -3376,8 +3406,13 @@ function buildProcesVerbalPdf(r, mandat, membresAssoc, d) {
   if (r.ordreDuJour) {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text('Ordre du jour', margin, y); y += 6;
     doc.setFont('helvetica', 'normal'); doc.setFontSize(10.5);
-    const odjLines = doc.splitTextToSize(r.ordreDuJour, contentW);
-    doc.text(odjLines, margin, y); y += odjLines.length * 5.4 + 8;
+    const odjPoints = r.ordreDuJour.split('\n').map(l => l.trim()).filter(Boolean);
+    odjPoints.forEach(point => {
+      const wrapped = doc.splitTextToSize('•  ' + point, contentW);
+      doc.text(wrapped, margin, y);
+      y += wrapped.length * 5.4 + 1.2;
+    });
+    y += 6.5;
   }
 
   // Liste de présence
@@ -3424,6 +3459,72 @@ function buildProcesVerbalPdf(r, mandat, membresAssoc, d) {
   if (state.data.profile.name) doc.text(`Signataire : ${state.data.profile.name}`, pageW - margin, footY, { align: 'right' });
 
   doc.save(`pv-reunion-${r.numero}-${(mandat ? mandat.nom : '').replace(/\s+/g, '_')}.pdf`);
+}
+
+// ---- Export PDF : membres du Bureau par mandat ----
+function buildBureauMembersPdf(mandat, d) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  const emeraldDk = [11, 122, 85], ink = [28, 42, 32], faint = [132, 146, 127], gold = [196, 137, 15], white = [255, 255, 255], track = [242, 245, 234];
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const margin = 18;
+  const contentW = pageW - margin * 2;
+
+  doc.setFillColor(...emeraldDk); doc.rect(0, 0, pageW, 32, 'F');
+  doc.setFillColor(...gold); doc.rect(0, 32, pageW, 1.3, 'F');
+  try { doc.addImage(PDF_LOGO_PNG, 'PNG', margin - 0.5, 8.5, 12, 12); } catch (e) { /* logo indisponible */ }
+  doc.setFont('times', 'bold'); doc.setFontSize(17); doc.setTextColor(...white);
+  doc.text('Membres du Bureau', margin + 16, 15);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5); doc.setTextColor(230, 240, 235);
+  doc.text(`Mandat — ${mandat.nom}`, margin + 16, 21.5);
+  doc.setFontSize(9); doc.setTextColor(230, 240, 235);
+  doc.text(`Généré le ${fmtDate(todayISO())}`, pageW - margin, 18, { align: 'right' });
+
+  const members = bureauMembresForMandat(d, mandat.id);
+  let y = 44;
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(...ink);
+  doc.text(`${members.length} membre${members.length > 1 ? 's' : ''} du Bureau`, margin, y);
+  y += 8;
+
+  const headers = ['Prénom', 'Nom', 'Poste', 'Contact'];
+  const rows = members.map(bm => [
+    bm.membre?.prenom || '—',
+    bm.membre?.nom || '—',
+    bm.poste?.nom || '—',
+    getMemberContactInfo(bm.membre) || '—'
+  ]);
+  const colRatios = [0.22, 0.22, 0.24, 0.32];
+  const widths = colRatios.map(r => r * contentW);
+  const lineH = 6.5;
+
+  function drawHeaderRow() {
+    doc.setFillColor(...emeraldDk); doc.rect(margin, y, contentW, lineH + 2, 'F');
+    doc.setTextColor(...white); doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5);
+    let x = margin;
+    headers.forEach((h, i) => { doc.text(h, x + 3, y + lineH, { maxWidth: widths[i] - 6 }); x += widths[i]; });
+    y += lineH + 2;
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(...ink);
+  }
+
+  drawHeaderRow();
+  rows.forEach((row, idx) => {
+    const wrapped = row.map((cell, i) => doc.splitTextToSize(String(cell), widths[i] - 6));
+    const nLines = Math.max(1, ...wrapped.map(cells => cells.length));
+    const rowHeight = nLines * lineH * 0.78;
+    if (y + rowHeight > pageH - margin) { doc.addPage(); y = margin; drawHeaderRow(); }
+    if (idx % 2 === 1) { doc.setFillColor(...track); doc.rect(margin, y, contentW, rowHeight, 'F'); }
+    doc.setFontSize(9.2); doc.setTextColor(...ink);
+    let x = margin;
+    wrapped.forEach((cells, i) => {
+      const text = cells[0] || '';
+      doc.text(text, x + 3, y + lineH * 0.68, { maxWidth: widths[i] - 6 });
+      x += widths[i];
+    });
+    y += rowHeight;
+  });
+
+  doc.save(`membres-bureau-${mandat.nom.replace(/\s+/g, '_')}.pdf`);
 }
 
 // ---- Export PDF : statistiques du Bureau ----
