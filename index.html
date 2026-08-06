@@ -2946,7 +2946,7 @@ function renderBureauReunions(d, mandat) {
         <input type="date" id="newReunionDate" value="${todayISO()}">
         <button class="btn btn-primary" id="addReunionBtn" ${hasMembres ? '' : 'disabled'}>Nouvelle réunion (n°${nextReunionNumero(d, mandat.id)})</button>
       </div>
-      <div style="font-size:11px;color:var(--ink-faint);margin-top:6px;">L’ordre du jour (un point par ligne) et le pointage se renseignent juste après, à l’ouverture de la réunion.</div>
+      <div style="font-size:11px;color:var(--ink-faint);margin-top:6px;">L’ordre du jour et le pointage se renseignent juste après, à l’ouverture de la réunion.</div>
       ${allReunions.length > 5 ? `<div style="margin-top:14px;"><input type="text" id="bureauReunionSearch" placeholder="Rechercher une réunion (numéro, date, ordre du jour...)" value="${escapeHtml(state.bureauReunionSearch || '')}" style="width:100%;"></div>` : ''}
       <div class="ledger" style="margin-top:14px;">
         ${(allReunions.length && !reunions.length) ? emptyRow('Aucune réunion ne correspond à cette recherche.') : reunions.map(r => {
