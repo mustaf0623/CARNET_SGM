@@ -2944,9 +2944,9 @@ function renderBureauReunions(d, mandat) {
       ${!hasMembres ? `<div class="card-sub" style="color:var(--terracotta-dim);">Ajoutez d’abord des membres au Bureau (onglet « Membres du Bureau ») pour pouvoir créer une réunion.</div>` : ''}
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center;">
         <input type="date" id="newReunionDate" value="${todayISO()}">
-        <input type="text" id="newReunionOdj" placeholder="Ordre du jour" style="flex:1;min-width:160px;">
         <button class="btn btn-primary" id="addReunionBtn" ${hasMembres ? '' : 'disabled'}>Nouvelle réunion (n°${nextReunionNumero(d, mandat.id)})</button>
       </div>
+      <div style="font-size:11px;color:var(--ink-faint);margin-top:6px;">L’ordre du jour (un point par ligne) et le pointage se renseignent juste après, à l’ouverture de la réunion.</div>
       ${allReunions.length > 5 ? `<div style="margin-top:14px;"><input type="text" id="bureauReunionSearch" placeholder="Rechercher une réunion (numéro, date, ordre du jour...)" value="${escapeHtml(state.bureauReunionSearch || '')}" style="width:100%;"></div>` : ''}
       <div class="ledger" style="margin-top:14px;">
         ${(allReunions.length && !reunions.length) ? emptyRow('Aucune réunion ne correspond à cette recherche.') : reunions.map(r => {
@@ -3209,7 +3209,7 @@ function attachBureauEvents() {
     const mandat = activeBureauMandat(d);
     if (!mandat) return;
     const date = document.getElementById('newReunionDate').value || todayISO();
-    const ordreDuJour = document.getElementById('newReunionOdj').value.trim();
+    const ordreDuJour = '';
     const numero = nextReunionNumero(d, mandat.id);
     const reunion = { id: uid(), mandatId: mandat.id, numero, date, ordreDuJour, pvTexte: '', pvLien: '' };
     d.bureauReunions.push(reunion);
