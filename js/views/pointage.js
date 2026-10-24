@@ -60,7 +60,7 @@ function renderPointage() {
             ? `<button class="btn btn-primary" id="endSessionBtn">${ICONS.mark} Marquer l’heure de fin</button>
                <span style="font-size:12px;color:var(--ink-faint);">Le pointage est ouvert. Marquez l’heure de fin pour pouvoir l’enregistrer.</span>`
             : legacySession
-              ? `<span style="font-size:12px;color:var(--ink-faint);">Ancienne séance — horaires non renseignés.</span>`
+              ? `<span style="font-size:12px;color:var(--ink-faint);">Ancienne séance, horaires non renseignés.</span>`
               : selectedSession.heureFin
                 ? `<span style="font-size:12px;color:var(--ink-faint);">Programme terminé : ${escapeHtml(sessionHours(selectedSession))}</span>`
                 : ''}
@@ -69,7 +69,7 @@ function renderPointage() {
         <span>${membres.length} membre${membres.length > 1 ? 's' : ''} inscrit${membres.length > 1 ? 's' : ''}</span>
         <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink-dim);font-weight:600;cursor:pointer;">
           <input type="checkbox" id="fastModeToggle" ${state.pointageFastMode ? 'checked' : ''} style="width:15px;height:15px;accent-color:var(--emerald);">
-          Pointage rapide — tout le monde est absent par défaut, cochez les présents
+          Pointage rapide tout le monde est absent par défaut, cochez les présents
         </label>
       </div>
       <div id="memberList">
@@ -139,7 +139,7 @@ function attachPointageEvents() {
     state.pointageSessionId = session.id;
     state.pointageLieu = lieu;
     await saveData();
-    showToast('Heure de début enregistrée — pointage déverrouillé');
+    showToast('Heure de début enregistrée pointage déverrouillé');
     render();
   });
   const endSessionBtn = document.getElementById('endSessionBtn');
@@ -148,7 +148,7 @@ function attachPointageEvents() {
     if (!session || !session.heureDebut || session.heureFin) return;
     session.heureFin = new Date().toISOString();
     await saveData();
-    showToast('Heure de fin enregistrée — pointage prêt à enregistrer');
+    showToast('Heure de fin enregistrée pointage prêt à enregistrer');
     render();
   });
   const deleteSessBtn = document.getElementById('deleteSessionBtn');
