@@ -1,0 +1,35 @@
+/* css/pointage.css — Pointage : champs de formulaire, lignes membres, statut, tampon */
+
+/* ---------- Pointage ---------- */
+.pointage-controls{ display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end; margin-bottom:22px; }
+.field{ display:flex; flex-direction:column; gap:6px; }
+.field label{ font-size:11px; text-transform:uppercase; letter-spacing:0.07em; color:var(--ink-faint); font-weight:700; }
+select, input[type=text], input[type=date], input[type=file]{
+  background:var(--card); border:1px solid var(--line-strong); color:var(--ink);
+  padding:9px 12px; border-radius:var(--radius-sm); font-size:13.5px; min-width:190px;
+}
+input[type=date]{ min-width:150px; }
+select:focus, input:focus{ border-color:var(--emerald); }
+
+.member-row{ display:flex; align-items:center; gap:14px; padding:12px 6px; border-bottom:1px dashed var(--line); }
+.member-avatar{
+  width:32px;height:32px;border-radius:50%; flex-shrink:0;
+  background:var(--card-2); border:1px solid var(--line-strong);
+  display:flex;align-items:center;justify-content:center; font-size:12px; font-weight:700;
+  font-family:'Fraunces',serif; color:var(--emerald-dim);
+}
+.member-name{ font-weight:700; font-size:13.5px; }
+.member-meta{ font-size:11.5px; color:var(--ink-faint); }
+.member-info{ flex:1; min-width:0; }
+
+.status-toggle{ display:flex; gap:8px; position:relative; }
+.status-btn{
+  padding:7px 14px; border-radius:999px; font-size:12px; font-weight:700;
+  border:1px solid var(--line-strong); background:transparent; color:var(--ink-faint);
+  position:relative; overflow:visible;
+}
+.status-btn.present.active{ background:var(--emerald-tint); border-color:var(--emerald); color:var(--emerald-dim); }
+.status-btn.absent.active{ background:var(--terracotta-tint); border-color:var(--terracotta); color:var(--terracotta-dim); }
+
+.stamp{ position:absolute; top:-6px; right:-6px; width:20px; height:20px; animation:stampIn 0.45s cubic-bezier(.3,1.6,.5,1) both; pointer-events:none; }
+@keyframes stampIn{ 0%{ transform:scale(2.4) rotate(-18deg); opacity:0; } 60%{ transform:scale(0.85) rotate(-6deg); opacity:1; } 100%{ transform:scale(1) rotate(-6deg); opacity:1; } }

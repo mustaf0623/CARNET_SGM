@@ -1,6 +1,6 @@
 {
-  "name": "Carnet — Registre de présence",
-  "short_name": "Carnet",
+  "name": "Carnet SGM — Registre de présence",
+  "short_name": "Carnet SGM",
   "description": "Registre de présence : pointage, statistiques et rapports par programme.",
   "start_url": "./index.html",
   "scope": "./",

@@ -1,7 +1,9 @@
-// sw.js — Carnet
-// Stratégie : Stale-While-Revalidate pour les ressources de l'app,
+// sw.js — Carnet SGM
+// Stratégie : Network-first pour la page et le code de l'app (css/, js/),
+// Stale-While-Revalidate pour les ressources externes (CDN, polices),
 // + cache des assets externes utilisés (CDN, polices) et fallback navigation hors-ligne.
-const CACHE_NAME = 'carnet-v10';
+// ⚠️ À incrémenter à CHAQUE déploiement (et à compléter si un fichier est ajouté ci-dessous).
+const CACHE_NAME = 'carnet-sgm-v12';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -11,6 +13,49 @@ const CORE_ASSETS = [
   './icon-512-maskable.png',
   './apple-touch-icon.png',
   './favicon.png',
+  // Styles (ordre = ordre de la cascade dans index.html)
+  './css/base.css',
+  './css/splash.css',
+  './css/layout.css',
+  './css/components.css',
+  './css/member-info.css',
+  './css/pointage.css',
+  './css/floating.css',
+  './css/onboarding.css',
+  './css/import-tables.css',
+  './css/responsive.css',
+  // Scripts (ordre = ordre de chargement dans index.html)
+  './js/config.js',
+  './js/core/icons.js',
+  './js/core/pdf-logo.js',
+  './js/core/utils.js',
+  './js/core/ui.js',
+  './js/data/db.js',
+  './js/data/sync.js',
+  './js/data/state.js',
+  './js/data/stats.js',
+  './js/data/bureau-stats.js',
+  './js/data/reconcile.js',
+  './js/services/export-members.js',
+  './js/services/report-pdf.js',
+  './js/services/bureau-pdf.js',
+  './js/components/confirm-modal.js',
+  './js/components/member-detail-modal.js',
+  './js/components/complete-info-modal.js',
+  './js/components/rename-modal.js',
+  './js/components/bureau-member-modal.js',
+  './js/views/shell.js',
+  './js/views/onboarding.js',
+  './js/views/dashboard.js',
+  './js/views/pointage.js',
+  './js/views/membres.js',
+  './js/views/import.js',
+  './js/views/rapports.js',
+  './js/views/bureau.js',
+  './js/views/auth.js',
+  './js/pwa/install.js',
+  './js/pwa/service-worker.js',
+  './js/main.js',
 ];
 
 // Assets externes référencés dans index.html — on les met en cache pour permettre
@@ -78,7 +123,17 @@ self.addEventListener('fetch', (event) => {
       }
     }
 
-    // Pour les autres requêtes : Stale-While-Revalidate
+    // Code de l'app (css/ et js/) et autres requêtes : Stale-While-Revalidate —
+    // on sert le cache immédiatement (rapide, y compris hors-ligne) et on
+    // rafraîchit en tâche de fond. L'app est répartie sur ~40 fichiers CSS/JS
+    // chargés par balises <script> classiques (donc l'un après l'autre) :
+    // attendre le réseau pour chacun (comme en Network-first) serait très
+    // lent dès que la connexion est présente mais peu fiable. La cohérence
+    // entre fichiers lors d'un déploiement est déjà garantie autrement :
+    // CACHE_NAME change à chaque déploiement, et l'étape "install" ci-dessus
+    // précharge alors la totalité des fichiers (page, CSS, JS) ensemble dans
+    // ce nouveau cache avant qu'il ne serve quoi que ce soit — il ne peut
+    // donc pas mélanger d'anciens et de nouveaux fichiers.
     if (cached) {
       // Relancer une requête réseau en tâche de fond pour rafraîchir le cache
       (async () => {

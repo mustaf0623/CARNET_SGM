@@ -1,0 +1,65 @@
+/* css/base.css — Variables (palette « encre de stylo-plume »), reset, typographie */
+
+:root{
+  color-scheme: light;
+  /* ---- pages (contenu principal) : papier registre ---- */
+  --paper:#F1ECDE;
+  --paper-2:#E7DFC9;
+  --card:#FBF8EE;
+  --card-2:#F3EEDC;
+  --ink:#1C2541;
+  --ink-dim:#4A5578;
+  --ink-faint:#8A8F72;
+  --line:rgba(28,37,65,0.13);
+  --line-strong:rgba(28,37,65,0.24);
+  --shadow:0 16px 38px -20px rgba(20,26,45,0.28);
+
+  /* ---- couverture (barre latérale) : encre profonde ---- */
+  --cover-bg:#141B33;
+  --cover-surface:#1E2A4D;
+  --cover-surface-2:#283762;
+  --cover-line:rgba(241,236,222,0.12);
+  --cover-line-strong:rgba(241,236,222,0.22);
+  --cover-ink:#F1ECDE;
+  --cover-ink-dim:#B7BBD0;
+  --cover-ink-faint:#7E8199;
+
+  /* ---- accents (mêmes teintes sur les deux fonds) ---- */
+  --emerald:#4F6B4D;
+  --emerald-dim:#3D5540;
+  --emerald-tint:rgba(79,107,77,0.14);
+  --terracotta:#9C3F2E;
+  --terracotta-dim:#7A2F21;
+  --terracotta-tint:rgba(156,63,46,0.14);
+  --gold:#A9791E;
+  --gold-tint:rgba(169,121,30,0.16);
+
+  --radius:14px;
+  --radius-sm:8px;
+}
+*{box-sizing:border-box;}
+html,body{height:100%;}
+/* Réserve toujours la place de la barre de défilement : sans ça, elle
+   apparaît/disparaît selon la hauteur de chaque onglet et décale toute
+   la mise en page (dont la barre latérale) de quelques pixels à chaque
+   changement d'onglet. */
+html{ overflow-y:scroll; scrollbar-gutter:stable; }
+html{ background:var(--paper); }
+body{
+  margin:0;
+  background:var(--paper);
+  color:var(--ink);
+  font-family:'Manrope', sans-serif;
+  -webkit-font-smoothing:antialiased;
+}
+h1,h2,h3,.display{ font-family:'Fraunces', serif; font-weight:600; letter-spacing:-0.01em; }
+.mono{ font-family:'IBM Plex Mono', monospace; }
+::selection{ background:var(--emerald); color:#fff; }
+a{color:inherit;}
+button{ font-family:inherit; cursor:pointer; }
+input,select{ font-family:inherit; }
+:focus-visible{ outline:2px solid var(--emerald); outline-offset:2px; border-radius:4px; }
+
+@media (prefers-reduced-motion: reduce){
+  *{ animation-duration:0.001ms !important; animation-iteration-count:1 !important; transition-duration:0.001ms !important; }
+}

@@ -1,0 +1,26 @@
+/* css/onboarding.css — Écran de première utilisation */
+
+/* ---------- Onboarding ---------- */
+.onboard-overlay{
+  position:fixed; inset:0; background:rgba(18,35,24,0.72); backdrop-filter:blur(6px);
+  display:flex; align-items:center; justify-content:center; z-index:100;
+  animation:fadeIn 0.4s ease;
+}
+@keyframes fadeIn{ from{opacity:0;} to{opacity:1;} }
+.onboard-card{
+  background:var(--card); border:1px solid var(--line-strong); border-radius:20px;
+  padding:38px 36px; width:min(400px, 90vw); text-align:center;
+  box-shadow:0 30px 70px -20px rgba(18,35,24,0.4);
+  animation:cardPop 0.5s cubic-bezier(.2,.8,.3,1) both;
+  max-height:88vh; overflow-y:auto;
+}
+@keyframes cardPop{ from{ opacity:0; transform:translateY(16px) scale(0.97); } to{ opacity:1; transform:none; } }
+.onboard-mark{ width:52px;height:52px;border-radius:14px; margin:0 auto 18px;
+  background:linear-gradient(155deg, var(--emerald), var(--emerald-dim));
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 10px 24px -8px rgba(15,158,110,0.6);
+}
+.onboard-mark svg{ width:26px;height:26px; }
+.onboard-card h2{ font-size:23px; margin:0 0 8px; }
+.onboard-card p{ color:var(--ink-dim); font-size:13.5px; line-height:1.5; margin:0 0 22px; }
+.onboard-card input{ width:100%; text-align:center; font-size:15px; margin-bottom:14px; }

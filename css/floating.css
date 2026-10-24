@@ -1,0 +1,41 @@
+/* css/floating.css — Éléments flottants : toast, boutons Installer / Synchroniser */
+
+.toast{
+  position:fixed; bottom:26px; left:50%; transform:translateX(-50%) translateY(20px);
+  background:var(--cover-bg); border:1px solid var(--emerald); color:var(--cover-ink);
+  padding:12px 20px; border-radius:999px; font-size:13.5px; font-weight:600;
+  box-shadow:var(--shadow); opacity:0; transition:all 0.35s cubic-bezier(.2,.8,.3,1); z-index:80;
+  display:flex; align-items:center; gap:8px;
+}
+.toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+.install-fab{
+  position:fixed; bottom:26px; right:22px; z-index:70;
+  display:inline-flex; align-items:center; gap:8px;
+  background:var(--emerald); color:#fff; border:none;
+  padding:12px 18px; border-radius:999px; font-weight:700; font-size:13.5px;
+  box-shadow:0 14px 30px -10px rgba(15,158,110,0.55);
+  animation:fabIn 0.5s cubic-bezier(.2,.8,.3,1) both;
+  transition:transform 0.15s ease, background 0.15s ease;
+}
+.install-fab:hover{ background:var(--emerald-dim); transform:translateY(-1px); }
+.install-fab svg{ width:16px; height:16px; }
+@keyframes fabIn{ from{ opacity:0; transform:translateY(14px) scale(0.95); } to{ opacity:1; transform:none; } }
+@media (max-width:820px){ .install-fab{ bottom:20px; right:16px; padding:11px 16px; font-size:12.5px; } .install-fab span{ display:none; } .install-fab{ padding:12px; } }
+
+.sync-fab{
+  position:fixed; bottom:26px; left:22px; z-index:70;
+  display:inline-flex; align-items:center; justify-content:center;
+  width:46px; height:46px;
+  background:var(--card); color:var(--emerald-dim); border:1px solid var(--line-strong);
+  border-radius:999px; cursor:pointer;
+  box-shadow:var(--shadow);
+  animation:fabIn 0.5s cubic-bezier(.2,.8,.3,1) both;
+  transition:transform 0.15s ease, background 0.15s ease;
+}
+.sync-fab:hover{ background:var(--card-2); transform:translateY(-1px); }
+.sync-fab:disabled{ opacity:0.7; cursor:default; transform:none; }
+.sync-fab svg{ width:19px; height:19px; }
+.sync-fab.spinning svg{ animation:spin 0.9s linear infinite; }
+@keyframes spin{ from{ transform:rotate(0deg); } to{ transform:rotate(360deg); } }
+@media (max-width:820px){ .sync-fab{ bottom:20px; left:16px; width:44px; height:44px; } }
