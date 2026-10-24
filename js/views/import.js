@@ -40,8 +40,8 @@ function renderImportZone() {
   if (state.importStep === 0) {
     return `<div class="drop-zone" id="dropZone">
       ${ICONS.upload}
-      <p style="margin:12px 0 4px;font-weight:700;">Cliquez pour choisir un fichier .xlsx ou .csv</p>
-      <p style="margin:0;color:var(--ink-faint);font-size:12.5px;">Vos données restent sur cet appareil</p>
+      <p style="margin:12px 0 4px;font-weight:700;">Cliquez pour ajouter le fichier .xlsx ou .csv des membres</p>
+      <p style="margin:0;color:var(--ink-faint);font-size:12.5px;">Vos données sont synchronisées sur tout vos appareils</p>
       <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display:none;">
     </div>`;
   }
@@ -62,7 +62,7 @@ function renderImportZone() {
       </div>`).join('')}
       ${renderImportPreviewTable()}
       <p style="font-size:11.5px;color:var(--ink-faint);margin-top:6px;">Catégorie attendue : Homme / Femme / Cadet / Cadette / Père / Mère. Sert à définir, par programme, quelles catégories ont ce programme comme prioritaire pour le calcul des absences.</p>
-      <p style="font-size:12px;color:var(--ink-faint);line-height:1.6;margin-top:14px;">Une fois importés, ces membres seront pointables dans tous les programmes déjà créés — et automatiquement dans ceux que vous créerez plus tard.</p>
+      <p style="font-size:12px;color:var(--ink-faint);line-height:1.6;margin-top:14px;">Une fois importés, ces membres seront pointables dans tous les programmes déjà créés et automatiquement dans ceux que vous créerez plus tard.</p>
       <div style="display:flex;gap:10px;margin-top:14px;">
         <button class="btn btn-primary" id="confirmImportBtn">Importer</button>
         <button class="btn btn-ghost" id="cancelImportBtn">Annuler</button>
@@ -133,6 +133,6 @@ async function confirmImport() {
 
   await saveData();
   state.importStep = 0; state.importRows = []; state.importHeaders = []; state.importMapping = {};
-  showToast(created + ' membre(s) importé(s) — pointables dans tous les programmes');
+  showToast(created + ' membre(s) importé(s) pointables dans tous les programmes');
   render();
 }
