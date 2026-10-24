@@ -62,7 +62,7 @@ function renderImportZone() {
       </div>`).join('')}
       ${renderImportPreviewTable()}
       <p style="font-size:11.5px;color:var(--ink-faint);margin-top:6px;">Catégorie attendue : Homme / Femme / Cadet / Cadette / Père / Mère. Sert à définir, par programme, quelles catégories ont ce programme comme prioritaire pour le calcul des absences.</p>
-      <p style="font-size:12px;color:var(--ink-faint);line-height:1.6;margin-top:14px;">Une fois importés, ces membres seront pointables dans tous les programmes déjà créés et automatiquement dans ceux que vous créerez plus tard.</p>
+      <p style="font-size:12px;color:var(--ink-faint);line-height:1.6;margin-top:14px;">Les autres colonnes du fichier sont conservées pour chaque membre, même si certaines cellules sont vides. Vous pourrez compléter ces informations plus tard depuis la fiche du membre. Une fois importés, ces membres seront pointables dans tous les programmes déjà créés et automatiquement dans ceux que vous créerez plus tard.</p>
       <div style="display:flex;gap:10px;margin-top:14px;">
         <button class="btn btn-primary" id="confirmImportBtn">Importer</button>
         <button class="btn btn-ghost" id="cancelImportBtn">Annuler</button>
@@ -124,8 +124,7 @@ async function confirmImport() {
     Object.keys(row).forEach(h => {
       if (mappedHeaders.has(h)) return;
       const v = row[h];
-      if (v === undefined || v === null || String(v).trim() === '') return;
-      extra[h] = String(v).trim();
+      extra[h] = v === undefined || v === null ? '' : String(v).trim();
     });
     d.membres.push({ id: uid(), nom: String(nom).trim(), prenom: String(prenom).trim(), sexe, categorie, programmeIds: [], allProgrammes: true, extra });
     created++;

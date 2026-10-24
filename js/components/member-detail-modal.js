@@ -89,7 +89,7 @@ function attachMemberDetailModal() {
       const keyInput = item.querySelector('.extraInfoKeyInput');
       const key = keyInput ? keyInput.value.trim() : item.dataset.key;
       const v = item.querySelector('.extraInfoValueInput').value.trim();
-      if (key && v) extra[key] = v;
+      if (key) extra[key] = v;
     });
     m.extra = extra;
     await saveData();
