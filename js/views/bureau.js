@@ -54,7 +54,7 @@ function renderBureauMandats(d, mandat) {
           <div style="font-size:11.5px;color:var(--ink-faint);">${m.dateDebut ? fmtDate(m.dateDebut) : '—'}${m.dateFin ? ' → ' + fmtDate(m.dateFin) : ''}</div>
           ${!m.actif ? `<button class="edit-name-btn set-active-mandat-btn" data-id="${m.id}">définir actif</button>` : ''}
           <button class="edit-name-btn delete-mandat-btn" data-id="${m.id}" style="color:var(--terracotta);">supprimer</button>
-        </div>`).join('') || emptyRow('Aucun mandat pour l’instant — créez le premier ci-dessus pour commencer.')}
+        </div>`).join('') || emptyRow('Aucun mandat pour l’instant créez le premier ci-dessus pour commencer.')}
       </div>
     </div>
   `;
@@ -64,7 +64,7 @@ function renderBureauPostes(d) {
   return `
     <div class="card">
       <h3 class="card-title">Postes du Bureau</h3>
-      <div class="card-sub">Définissez les postes (Président, Secrétaire général, Trésorier...) que vous pourrez ensuite attribuer aux membres.</div>
+      <div class="card-sub">Définissez les postes (Président, Secrétaire, Trésorier...) que vous pourrez ensuite attribuer aux membres.</div>
       <div style="display:flex;gap:8px;margin-top:12px;">
         <input type="text" id="newPosteName" placeholder="Nom du poste" style="flex:1;">
         <button class="btn btn-primary" id="addPosteBtn">Ajouter</button>
@@ -87,7 +87,7 @@ function renderBureauMembres(d, mandat) {
         <span>Membres du Bureau — ${escapeHtml(mandat.nom)}</span>
         <button class="btn btn-ghost btn-sm" id="exportBureauMembersBtn">Exporter en PDF</button>
       </h3>
-      <div class="card-sub">Seuls les membres permanents peuvent faire partie du Bureau.</div>
+      <div class="card-sub">Seuls les membres de la section peuvent faire partie du Bureau.</div>
       ${!d.bureauPostes.length ? `<div style="font-size:11.5px;color:var(--terracotta-dim);margin-top:8px;">Définissez d’abord au moins un poste dans l’onglet « Postes ».</div>` : ''}
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">
         <select id="newBureauMembreSelect" style="flex:1;min-width:160px;">
@@ -125,7 +125,7 @@ function renderBureauReunions(d, mandat) {
   const hasMembres = bureauMembresForMandat(d, mandat.id).length > 0;
   return `
     <div class="card">
-      <h3 class="card-title">Réunions — ${escapeHtml(mandat.nom)}</h3>
+      <h3 class="card-title">Réunions ${escapeHtml(mandat.nom)}</h3>
       ${!hasMembres ? `<div class="card-sub" style="color:var(--terracotta-dim);">Ajoutez d’abord des membres au Bureau (onglet « Membres du Bureau ») pour pouvoir créer une réunion.</div>` : ''}
       <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center;">
         <input type="date" id="newReunionDate" value="${todayISO()}">
@@ -179,7 +179,7 @@ function renderBureauReunionDetail(d, mandat) {
 
       <div style="margin-top:18px;padding:12px;border:1px dashed var(--line);border-radius:12px;background:var(--card-2);">
         <div class="card-title" style="font-size:13px;margin:0 0 4px;">Invités présents (hors Bureau officiel)</div>
-        <div class="card-sub" style="margin-bottom:8px;">Personnes présentes à la réunion qui ne font pas partie du Bureau — n’entrent jamais dans les statistiques du Bureau.</div>
+        <div class="card-sub" style="margin-bottom:8px;">Personnes présentes à la réunion qui ne font pas partie du bureau. N’entrent jamais dans les statistiques du Bureau.</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
           <input type="text" id="extraPresentName" placeholder="Nom de l’invité" style="flex:1;min-width:180px;">
           <input type="text" id="extraPresentPoste" placeholder="Fonction / motif (optionnel)" style="min-width:150px;">
@@ -226,7 +226,7 @@ function renderBureauStats(d, mandat) {
     </div>
     <div class="card">
       <h3 class="card-title" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;">
-        <span>Statistiques par membre — ${escapeHtml(mandat.nom)}</span>
+        <span>Statistiques par membre ${escapeHtml(mandat.nom)}</span>
         <button class="btn btn-ghost btn-sm" id="exportBureauStatsBtn">Exporter en PDF</button>
       </h3>
       <div class="ledger">
