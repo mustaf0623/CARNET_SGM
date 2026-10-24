@@ -2,8 +2,8 @@
 // Stratégie : Network-first pour la page et le code de l'app (css/, js/),
 // Stale-While-Revalidate pour les ressources externes (CDN, polices),
 // + cache des assets externes utilisés (CDN, polices) et fallback navigation hors-ligne.
-// ⚠️ À incrémenter à CHAQUE déploiement (et à compléter si un fichier est ajouté ci-dessous).
-const CACHE_NAME = 'carnet-sgm-v12';
+// À incrémenter à CHAQUE déploiement (et à compléter si un fichier est ajouté ci-dessous).
+const CACHE_NAME = 'carnet-sgm-v13';
 const CORE_ASSETS = [
   './',
   './index.html',
