@@ -48,7 +48,7 @@ function renderDashboard() {
       <div>
         <div class="eyebrow">Vue d’ensemble</div>
         <h1 class="page-title">Tableau de bord</h1>
-        <p class="page-sub">Comportement des données de présence filtrable par programme et par année.</p>
+        <p class="page-sub">Comportement des données de présence — filtrable par programme et par année.</p>
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
         <div class="field">
@@ -73,6 +73,11 @@ function renderDashboard() {
         <h3 class="card-title">Répartition Hommes / Femmes</h3>
         <div class="card-sub">${filter === 'global' ? 'Sur l’ensemble des membres' : 'Sur les membres de ce programme'}</div>
         <canvas id="hfChart" height="200"></canvas>
+      </div>
+      <div class="card" style="grid-column:1/-1;">
+        <h3 class="card-title">Répartition par catégorie</h3>
+        <div class="card-sub">${filter === 'global' ? 'Sur l’ensemble des membres permanents' : 'Sur les membres permanents de ce programme'}</div>
+        <canvas id="categoryChart" height="170"></canvas>
       </div>
     </div>
     ${filter === 'global' ? `<div class="card" style="margin-top:16px;">
@@ -114,7 +119,7 @@ const centerTextPlugin = {
   }
 };
 
-let hfChartInst = null, partChartInst = null, trendChartInst = null;
+let hfChartInst = null, categoryChartInst = null, partChartInst = null, trendChartInst = null;
 function attachDashboardEvents() {
   const d = state.data;
   const filterSel = document.getElementById('dashFilter');
@@ -151,6 +156,42 @@ function attachDashboardEvents() {
     });
     hfChartInst.config._centerText = { value: String(g.total), label: g.total > 1 ? 'membres' : 'membre' };
     hfChartInst.update();
+  }
+  const categoryCanvas = document.getElementById('categoryChart');
+  if (categoryCanvas) {
+    if (categoryChartInst) categoryChartInst.destroy();
+    const categories = g.categoryCounts;
+    const categoryColors = ['#C79A3E', '#6B8768', '#7886A8', '#C77C55', '#8E6FA8', '#4E9A9A', '#C9A6A0', '#718096'];
+    categoryChartInst = new Chart(categoryCanvas, {
+      type: 'doughnut',
+      data: {
+        labels: categories.map(item => item.categorie),
+        datasets: [{
+          data: categories.map(item => item.nombre),
+          backgroundColor: categories.map((_, index) => categoryColors[index % categoryColors.length]),
+          borderColor: '#FFFFFF',
+          borderWidth: 4,
+          hoverOffset: 14,
+          hoverBorderWidth: 4,
+        }]
+      },
+      options: {
+        cutout: '70%',
+        animation: { animateRotate: true, animateScale: true, duration: 1000, easing: 'easeOutQuart' },
+        interaction: { intersect: true },
+        plugins: {
+          legend: { position: 'bottom', labels: { color: '#1C2541', usePointStyle: true, pointStyle: 'circle', padding: 16, font: { family: 'Manrope', size: 12, weight: 600 } } },
+          tooltip: {
+            backgroundColor: '#141B33', titleColor: '#F1ECDE', bodyColor: '#F1ECDE',
+            padding: 10, cornerRadius: 8, displayColors: true, boxPadding: 4,
+            callbacks: { label: ctx => ' ' + ctx.label + ' : ' + ctx.parsed + (g.total ? ' (' + Math.round(ctx.parsed / g.total * 100) + '%)' : '') }
+          }
+        }
+      },
+      plugins: [centerTextPlugin]
+    });
+    categoryChartInst.config._centerText = { value: String(g.total), label: g.total > 1 ? 'membres' : 'membre' };
+    categoryChartInst.update();
   }
   const partCanvas = document.getElementById('partChart');
   if (partCanvas) {
