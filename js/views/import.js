@@ -40,8 +40,8 @@ function renderImportZone() {
   if (state.importStep === 0) {
     return `<div class="drop-zone" id="dropZone">
       ${ICONS.upload}
-      <p style="margin:12px 0 4px;font-weight:700;">Cliquez pour ajouter le fichier .xlsx ou .csv des membres</p>
-      <p style="margin:0;color:var(--ink-faint);font-size:12.5px;">Vos données sont synchronisées sur tout vos appareils</p>
+      <p style="margin:12px 0 4px;font-weight:700;">Cliquez pour choisir un fichier .xlsx ou .csv</p>
+      <p style="margin:0;color:var(--ink-faint);font-size:12.5px;">Vos données restent sur cet appareil</p>
       <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display:none;">
     </div>`;
   }
@@ -62,7 +62,7 @@ function renderImportZone() {
       </div>`).join('')}
       ${renderImportPreviewTable()}
       <p style="font-size:11.5px;color:var(--ink-faint);margin-top:6px;">Catégorie attendue : Homme / Femme / Cadet / Cadette / Père / Mère. Sert à définir, par programme, quelles catégories ont ce programme comme prioritaire pour le calcul des absences.</p>
-      <p style="font-size:12px;color:var(--ink-faint);line-height:1.6;margin-top:14px;">Les autres colonnes du fichier sont conservées pour chaque membre, même si certaines cellules sont vides. Vous pourrez compléter ces informations plus tard depuis la fiche du membre. Une fois importés, ces membres seront pointables dans tous les programmes déjà créés et automatiquement dans ceux que vous créerez plus tard.</p>
+      <p style="font-size:12px;color:var(--ink-faint);line-height:1.6;margin-top:14px;">Les autres colonnes du fichier sont conservées pour chaque membre, même si certaines cellules sont vides. Vous pourrez compléter ces informations plus tard depuis la fiche du membre. Une fois importés, ces membres seront pointables dans tous les programmes déjà créés — et automatiquement dans ceux que vous créerez plus tard.</p>
       <div style="display:flex;gap:10px;margin-top:14px;">
         <button class="btn btn-primary" id="confirmImportBtn">Importer</button>
         <button class="btn btn-ghost" id="cancelImportBtn">Annuler</button>
@@ -87,6 +87,19 @@ function guessMapping(headers) {
   });
   return map;
 }
+function isBirthDateHeader(header) {
+  const normalized = String(header || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return /naissance|birth|birthday|\bdob\b|ne(?:e)?(?:\s*\(e\))?\s*le/.test(normalized);
+}
+function formatImportedBirthDate(value) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return [String(value.getDate()).padStart(2, '0'), String(value.getMonth() + 1).padStart(2, '0'), value.getFullYear()].join('/');
+  }
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0 || value > 2958465) return value;
+  const date = XLSX.SSF.parse_date_code(value);
+  if (!date) return value;
+  return [String(date.d).padStart(2, '0'), String(date.m).padStart(2, '0'), date.y].join('/');
+}
 function handleFile(e) {
   const file = e.target.files[0];
   if (!file) return;
@@ -95,7 +108,12 @@ function handleFile(e) {
     try {
       const wb = XLSX.read(ev.target.result, { type: 'array' });
       const sheet = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
+      const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' }).map(row => {
+        Object.keys(row).forEach(header => {
+          if (isBirthDateHeader(header)) row[header] = formatImportedBirthDate(row[header]);
+        });
+        return row;
+      });
       if (!rows.length) { showToast('Fichier vide ou illisible'); return; }
       state.importRows = rows;
       state.importHeaders = Object.keys(rows[0]);
@@ -132,6 +150,6 @@ async function confirmImport() {
 
   await saveData();
   state.importStep = 0; state.importRows = []; state.importHeaders = []; state.importMapping = {};
-  showToast(created + ' membre(s) importé(s) pointables dans tous les programmes');
+  showToast(created + ' membre(s) importé(s) — pointables dans tous les programmes');
   render();
 }
