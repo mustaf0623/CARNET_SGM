@@ -3,7 +3,7 @@
 // Stale-While-Revalidate pour les ressources externes (CDN, polices),
 // + cache des assets externes utilisés (CDN, polices) et fallback navigation hors-ligne.
 // ⚠️ À incrémenter à CHAQUE déploiement (et à compléter si un fichier est ajouté ci-dessous).
-const CACHE_NAME = 'carnet-sgm-v14';
+const CACHE_NAME = 'carnet-sgm-v15';
 const CORE_ASSETS = [
   './',
   './index.html',
