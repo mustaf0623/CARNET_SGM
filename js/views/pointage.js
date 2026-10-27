@@ -20,7 +20,7 @@ function renderPointage() {
     d.pointages.filter(p => p.sessionId === state.pointageSessionId).forEach(p => currentPointages[p.membreId] = p.statut);
   }
   let membres = d.membres.filter(m => memberInProgramme(m, state.pointageProgId));
-
+  
   return `
     <div class="page-head">
       <div>
@@ -60,7 +60,7 @@ function renderPointage() {
             ? `<button class="btn btn-primary" id="endSessionBtn">${ICONS.mark} Marquer l’heure de fin</button>
                <span style="font-size:12px;color:var(--ink-faint);">Le pointage est ouvert. Marquez l’heure de fin pour pouvoir l’enregistrer.</span>`
             : legacySession
-              ? `<span style="font-size:12px;color:var(--ink-faint);">Ancienne séance, horaires non renseignés.</span>`
+              ? `<span style="font-size:12px;color:var(--ink-faint);">Ancienne séance — horaires non renseignés.</span>`
               : selectedSession.heureFin
                 ? `<span style="font-size:12px;color:var(--ink-faint);">Programme terminé : ${escapeHtml(sessionHours(selectedSession))}</span>`
                 : ''}
@@ -69,7 +69,7 @@ function renderPointage() {
         <span>${membres.length} membre${membres.length > 1 ? 's' : ''} inscrit${membres.length > 1 ? 's' : ''}</span>
         <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink-dim);font-weight:600;cursor:pointer;">
           <input type="checkbox" id="fastModeToggle" ${state.pointageFastMode ? 'checked' : ''} style="width:15px;height:15px;accent-color:var(--emerald);">
-          Pointage rapide tout le monde est absent par défaut, cochez les présents
+          Pointage rapide — tout le monde est absent par défaut, cochez les présents
         </label>
       </div>
       <div id="memberList">
@@ -112,6 +112,18 @@ function memberRow(m, statut, fastMode, disabled) {
     ${statusHtml}
   </div>`;
 }
+function attendanceFingerprint(programmeId, date, lieu, presentMemberIds) {
+  const encoder = new TextEncoder();
+  const encodeField = value => {
+    const text = String(value || '');
+    return encoder.encode(text).length + ':' + text;
+  };
+  return encodeField(programmeId) + encodeField(date) + encodeField(lieu)
+    + Array.from(new Set(presentMemberIds)).sort().map(encodeField).join('');
+}
+function sessionAttendanceLieu(session) {
+  return session.lieu || session.label || '';
+}
 function attachPointageEvents() {
   const d = state.data;
   const progSel = document.getElementById('progSelect');
@@ -139,7 +151,7 @@ function attachPointageEvents() {
     state.pointageSessionId = session.id;
     state.pointageLieu = lieu;
     await saveData();
-    showToast('Heure de début enregistrée pointage déverrouillé');
+    showToast('Heure de début enregistrée — pointage déverrouillé');
     render();
   });
   const endSessionBtn = document.getElementById('endSessionBtn');
@@ -148,7 +160,7 @@ function attachPointageEvents() {
     if (!session || !session.heureDebut || session.heureFin) return;
     session.heureFin = new Date().toISOString();
     await saveData();
-    showToast('Heure de fin enregistrée pointage prêt à enregistrer');
+    showToast('Heure de fin enregistrée — pointage prêt à enregistrer');
     render();
   });
   const deleteSessBtn = document.getElementById('deleteSessionBtn');
@@ -208,6 +220,7 @@ function attachPointageEvents() {
     const rows = document.querySelectorAll('#memberList .member-row');
     let marked = 0;
     let apTouched = [];
+    const pointagesToSave = d.pointages.filter(p => p.sessionId !== sessionId);
     rows.forEach(row => {
       const membreId = row.dataset.membre;
       const active = row.querySelector('.status-btn.active');
@@ -215,19 +228,60 @@ function attachPointageEvents() {
       if (active) statut = active.dataset.statut;
       else if (state.pointageFastMode) statut = 'absent';
       else return;
-      d.pointages = d.pointages.filter(p => !(p.sessionId === sessionId && p.membreId === membreId));
-      d.pointages.push({ id: uid(), sessionId, membreId, statut });
+      pointagesToSave.push({ id: uid(), sessionId, membreId, statut });
       marked++;
       const membre = d.membres.find(m => m.id === membreId);
       if (membre && membre.ap) apTouched.push(membre);
     });
+    const fingerprint = attendanceFingerprint(
+      session.programmeId,
+      session.date,
+      sessionAttendanceLieu(session),
+      pointagesToSave.filter(p => p.sessionId === sessionId && p.statut === 'present').map(p => p.membreId)
+    );
+    const duplicateSession = d.sessions.find(other => {
+      if (other.id === sessionId || other.programmeId !== session.programmeId
+        || other.date !== session.date || sessionAttendanceLieu(other) !== sessionAttendanceLieu(session)) return false;
+      const otherFingerprint = attendanceFingerprint(
+        other.programmeId,
+        other.date,
+        sessionAttendanceLieu(other),
+        d.pointages.filter(p => p.sessionId === other.id && p.statut === 'present').map(p => p.membreId)
+      );
+      return otherFingerprint === fingerprint;
+    });
+    if (duplicateSession) {
+      if (!d.pointages.some(pointage => pointage.sessionId === sessionId)) {
+        state.pointageDate = session.date;
+        state.pointageLieu = sessionAttendanceLieu(session);
+        state.pointageSessionId = 'new';
+        d.sessions = d.sessions.filter(item => item.id !== sessionId);
+        await saveData();
+        render();
+      }
+      showToast('Cette séance a déjà été pointée par un autre utilisateur. Votre pointage n’a pas été enregistré ; supprimez-le s’il apparaît encore.');
+      return;
+    }
+    d.pointages = pointagesToSave;
+    session.attendanceFingerprint = fingerprint;
+    const syncResult = await saveData({ waitForSync: true });
+    if (syncResult === 'duplicate-attendance') {
+      render();
+      return;
+    }
     const promoted = apTouched.filter(m => checkApPromotion(d, m.id));
-    if (promoted.length) state.completeInfoQueue = (state.completeInfoQueue || []).concat(promoted.map(m => m.id));
-    await saveData();
+    if (promoted.length) {
+      state.completeInfoQueue = (state.completeInfoQueue || []).concat(promoted.map(m => m.id));
+      await saveData();
+    }
     state.pointageSessionId = sessionId;
-    showToast(marked
-      ? 'Pointage enregistré (' + marked + ' membres)' + (promoted.length ? ' — ' + promoted.map(m => m.prenom + ' ' + m.nom).join(', ') + ' intégré(s) définitivement à la base' : '')
-      : 'Aucun statut sélectionné');
+    if (syncResult === false && sb && sbUser) {
+      showToast('Pointage enregistré localement — synchronisation en attente');
+    } else {
+      showToast(marked
+        ? 'Pointage enregistré (' + marked + ' membres)' + (promoted.length ? ' — ' + promoted.map(m => m.prenom + ' ' + m.nom).join(', ') + ' intégré(s) définitivement à la base' : '')
+        : 'Aucun statut sélectionné');
+    }
     render();
   });
 }
