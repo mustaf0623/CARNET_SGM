@@ -1,6 +1,22 @@
 /* js/views/dashboard.js — Tableau de bord et état vide */
 
 /* ================= DASHBOARD ================= */
+function dashboardCategoryCounts(data, progFilter) {
+  const members = (progFilter === 'global'
+    ? data.membres
+    : data.membres.filter(member => memberInProgramme(member, progFilter)))
+    .filter(member => !member.ap);
+  const counts = new Map();
+  members.forEach(member => {
+    const category = normaliseCategorie(member.categorie)
+      || String(member.categorie || '').trim()
+      || 'Non définie';
+    counts.set(category, (counts.get(category) || 0) + 1);
+  });
+  return Array.from(counts, ([categorie, nombre]) => ({ categorie, nombre }))
+    .sort((a, b) => b.nombre - a.nombre || a.categorie.localeCompare(b.categorie, 'fr'));
+}
+
 function renderDashboard() {
   const d = state.data;
   if (!d.membres.length) return renderEmpty();
@@ -160,7 +176,7 @@ function attachDashboardEvents() {
   const categoryCanvas = document.getElementById('categoryChart');
   if (categoryCanvas) {
     if (categoryChartInst) categoryChartInst.destroy();
-    const categories = g.categoryCounts;
+    const categories = dashboardCategoryCounts(d, state.dashProgFilter);
     const categoryColors = ['#C79A3E', '#6B8768', '#7886A8', '#C77C55', '#8E6FA8', '#4E9A9A', '#C9A6A0', '#718096'];
     categoryChartInst = new Chart(categoryCanvas, {
       type: 'doughnut',
