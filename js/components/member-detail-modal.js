@@ -10,6 +10,8 @@ function renderMemberDetailModal() {
     years.map(y => `<option value="${y}" ${yearFilter === y ? 'selected' : ''}>${y}</option>`)
   ).join('');
   const stats = memberStats(d, m.id, yearFilter);
+  const categories = ['Homme', 'Femme', 'Cadet', 'Cadette', 'Père', 'Mère'];
+  if (m.categorie && !categories.includes(m.categorie)) categories.push(m.categorie);
   return `
   <div class="onboard-overlay" id="memberDetailOverlay">
     <button id="memberDetailCloseFixedBtn" title="Fermer" style="position:fixed;top:16px;right:16px;z-index:200;width:36px;height:36px;border-radius:50%;border:1px solid rgba(237,241,229,0.3);background:rgba(18,35,24,0.75);backdrop-filter:blur(4px);color:#fff;font-size:18px;line-height:1;cursor:pointer;">×</button>
@@ -21,6 +23,16 @@ function renderMemberDetailModal() {
           <div style="font-size:12.5px;color:var(--ink-faint);">${m.sexe === 'H' ? 'Homme' : 'Femme'}${m.categorie ? ' · Catégorie : ' + escapeHtml(m.categorie) : ''}${m.allProgrammes ? ' · Tous les programmes' : ''}</div>
         </div>
         <select id="memberDetailYear" style="margin-left:auto;min-width:130px;">${yearOptions}</select>
+      </div>
+      <div class="field" style="display:flex;align-items:end;gap:8px;margin:12px 0;">
+        <div style="flex:1;">
+          <label for="memberDetailCategory">Catégorie du membre</label>
+          <select id="memberDetailCategory" style="width:100%;">
+            <option value="" ${!m.categorie ? 'selected' : ''}>Non définie</option>
+            ${categories.map(category => `<option value="${escapeHtml(category)}" ${category === m.categorie ? 'selected' : ''}>${escapeHtml(category)}</option>`).join('')}
+          </select>
+        </div>
+        <button class="btn btn-primary btn-sm" id="memberDetailCategorySaveBtn" type="button">Enregistrer</button>
       </div>
       <div class="grid grid-4" style="margin:16px 0;gap:10px;">
         ${statCard('Séances', stats.overall.total, 'pointées', 'stat-gold')}
@@ -63,6 +75,39 @@ function attachMemberDetailModal() {
   document.getElementById('memberDetailOverlay')?.addEventListener('click', (e) => { if (e.target.id === 'memberDetailOverlay') { state.memberDetailId = null; render(); } });
   const yearSel = document.getElementById('memberDetailYear');
   if (yearSel) yearSel.addEventListener('change', e => { state.dashYearFilter = e.target.value; render(); });
+
+  const categorySaveBtn = document.getElementById('memberDetailCategorySaveBtn');
+  if (categorySaveBtn) categorySaveBtn.addEventListener('click', async () => {
+    const m = state.data.membres.find(x => x.id === state.memberDetailId);
+    const categorySelect = document.getElementById('memberDetailCategory');
+    if (!m || !categorySelect) return;
+    const previousCategory = m.categorie || '';
+    const nextCategory = categorySelect.value;
+    if (previousCategory === nextCategory) {
+      showToast('La catégorie n’a pas changé');
+      return;
+    }
+    const affectedPrograms = state.data.programmes.filter(programme =>
+      memberInProgramme(m, programme.id)
+      && isPriorityProgram(programme, previousCategory) !== isPriorityProgram(programme, nextCategory)
+    );
+    const impact = affectedPrograms.length
+      ? 'Les absences passées et futures seront désormais comptées différemment dans les programmes suivants : '
+        + affectedPrograms.map(programme => programme.nom).join(', ')
+        + '. Les statistiques et rapports seront recalculés.'
+      : 'Aucun programme actuellement associé à ce membre ne définit de priorité par catégorie : ce changement ne modifie donc pas le calcul actuel des absences.';
+    openConfirm(
+      'Confirmer le changement de catégorie ?',
+      impact + ' Aucun pointage ne sera modifié ou supprimé.',
+      async () => {
+        m.categorie = nextCategory;
+        await saveData();
+        showToast('Catégorie du membre mise à jour');
+        render();
+      },
+      'Confirmer le changement'
+    );
+  });
 
   const grid = document.getElementById('extraInfoGrid');
   if (grid) grid.addEventListener('click', e => {
