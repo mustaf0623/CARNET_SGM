@@ -84,6 +84,7 @@ async function pullFromSupabase() {
   const sessions = (sessRes.data || []).map(r => ({
     id: r.id, programmeId: r.programme_id, date: r.date, label: r.label,
     lieu: r.lieu || r.label || '', heureDebut: r.heure_debut || '', heureFin: r.heure_fin || '',
+    attendanceFingerprint: r.attendance_fingerprint || '',
   }));
   const pointages = (ptRes.data || []).map(r => ({ id: r.id, sessionId: r.session_id, membreId: r.membre_id, statut: r.statut }));
   const name = (profRes.data && profRes.data.name) || '';
@@ -109,6 +110,58 @@ async function syncTable(tableName, rows, toRemote, prevMap) {
 
 let syncing = false;
 let syncQueued = false;
+async function rejectDuplicateAttendance() {
+  const candidates = state.data.sessions.filter(session => session.attendanceFingerprint
+    && snapshotMaps.sessions.get(session.id) !== JSON.stringify(session));
+  if (!candidates.length) return false;
+  const fingerprints = Array.from(new Set(candidates.map(session => session.attendanceFingerprint)));
+  const { data, error } = await sb.from('sessions')
+    .select('id, attendance_fingerprint')
+    .in('attendance_fingerprint', fingerprints);
+  if (error) throw error;
+  const remoteFingerprints = new Set((data || []).map(session => session.attendance_fingerprint));
+  const rejected = candidates.filter(session => remoteFingerprints.has(session.attendanceFingerprint)
+    && !(data || []).some(remote => remote.attendance_fingerprint === session.attendanceFingerprint && remote.id === session.id));
+  if (!rejected.length) return false;
+
+  rejected.forEach(session => {
+    const previousSession = snapshotMaps.sessions.get(session.id);
+    if (previousSession) {
+      const restored = JSON.parse(previousSession);
+      const previousPointages = Array.from(snapshotMaps.pointages.values())
+        .map(json => JSON.parse(json))
+        .filter(pointage => pointage.sessionId === session.id);
+      if (!restored.attendanceFingerprint && !previousPointages.length) {
+        state.data.sessions = state.data.sessions.filter(item => item.id !== session.id);
+        state.data.pointages = state.data.pointages.filter(pointage => pointage.sessionId !== session.id);
+        syncQueued = true;
+      } else {
+        state.data.sessions = state.data.sessions.map(item => item.id === session.id ? restored : item);
+        state.data.pointages = state.data.pointages.filter(pointage => pointage.sessionId !== session.id)
+          .concat(previousPointages);
+      }
+    } else {
+      state.data.sessions = state.data.sessions.filter(item => item.id !== session.id);
+      state.data.pointages = state.data.pointages.filter(pointage => pointage.sessionId !== session.id);
+    }
+    if (state.pointageSessionId === session.id) {
+      state.pointageSessionId = 'new';
+      state.pointageDate = session.date;
+      state.pointageLieu = session.lieu || '';
+    }
+  });
+  try { localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify(state.data)); } catch (e) {
+    console.error('Carnet SGM — impossible de sauvegarder localement le rejet du doublon:', e);
+  }
+  try { await idbSet('carnet-data', state.data); } catch (e) {
+    console.error('Carnet SGM — impossible de sauvegarder localement le rejet du doublon:', e);
+  }
+  await saveSyncState(true);
+  if (state.tab === 'pointage') render();
+  showToast('Un autre utilisateur a déjà pointé cette séance. Le pointage a été rejeté ; supprimez-le s’il apparaît encore.');
+  return true;
+}
+
 async function pushToSupabase() {
   if (!sb || !sbUser) return false;
   if (syncing) { syncQueued = true; return false; }
@@ -120,6 +173,7 @@ async function pushToSupabase() {
       id: s.id, programme_id: s.programmeId, date: s.date,
       label: s.label || s.lieu || 'Séance', lieu: s.lieu || s.label || '',
       heure_debut: s.heureDebut || null, heure_fin: s.heureFin || null,
+      attendance_fingerprint: s.attendanceFingerprint || null,
     }), snapshotMaps.sessions);
     snapshotMaps.pointages = await syncTable('pointages', state.data.pointages, p => ({ id: p.id, session_id: p.sessionId, membre_id: p.membreId, statut: p.statut }), snapshotMaps.pointages);
     snapshotMaps.bureauMandats = await syncTable('bureau_mandats', state.data.bureauMandats, m => ({ id: m.id, nom: m.nom, date_debut: m.dateDebut || null, date_fin: m.dateFin || null, actif: !!m.actif }), snapshotMaps.bureauMandats);
@@ -133,6 +187,13 @@ async function pushToSupabase() {
     return true;
   } catch (e) {
     console.error('Carnet SGM — échec pushToSupabase:', e);
+    if (e && e.code === '23505' && String(e.message || '').includes('sessions_attendance_fingerprint_key')) {
+      try {
+        if (await rejectDuplicateAttendance()) return 'duplicate-attendance';
+      } catch (rejectionError) {
+        console.error('Carnet SGM — impossible de restaurer le pointage rejeté:', rejectionError);
+      }
+    }
     showToast('Échec de synchronisation : ' + (e && e.message ? e.message : 'erreur inconnue'));
     return false;
   } finally {
@@ -171,7 +232,7 @@ function handleRemoteChange() {
   }, 900);
 }
 let realtimeChannel = null;
-function subscribeRealtime()
+function subscribeRealtime() 
 {
   if (!sb || !sbUser) return;
   if (realtimeChannel) return;

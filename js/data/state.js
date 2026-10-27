@@ -53,14 +53,18 @@ async function loadData() {
   try { const backup = localStorage.getItem(LOCAL_BACKUP_KEY); return backup ? ensureBureauFields(JSON.parse(backup)) : null; } catch (e) { /* noop */ }
   return null;
 }
-async function saveData() {
+async function saveData(options = {}) {
   // Copie synchrone avant toute attente : elle reste disponible même si l'app se ferme maintenant.
   try { localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify(state.data)); } catch (e) { /* stockage indisponible */ }
   await saveSyncState(true);
   try { localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify(state.data)); } catch (e) { /* stockage indisponible */ }
   try { await idbSet('carnet-data', state.data); }
   catch (e) { showToast('Échec de la sauvegarde locale'); }
-  if (sb && sbUser) pushToSupabase();
+  if (sb && sbUser) {
+    if (options.waitForSync) return await pushToSupabase();
+    pushToSupabase();
+  }
+  return true;
 }
 
 async function resetAppData() {
