@@ -48,11 +48,11 @@ function renderPointage() {
     </div>
     <div class="card">
       <h3 class="card-title">${escapeHtml(prog.nom)}</h3>
-      ${selectedSession ? `<div class="card-sub" style="margin-bottom:12px;">
+      ${selectedSession ? `<div class="card-sub" id="sessionSummary" style="margin-bottom:12px;">
         Lieu : ${escapeHtml(sessionLieu(selectedSession) || 'Non renseigné')}
         ${sessionHours(selectedSession) ? ' · Horaires : ' + escapeHtml(sessionHours(selectedSession)) : ''}
       </div>` : ''}
-      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px;">
+      <div id="sessionStatus" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px;">
         ${!selectedSession
           ? `<button class="btn btn-primary" id="startSessionBtn">${ICONS.mark} Marquer l’heure de début</button>
              <span style="font-size:12px;color:var(--ink-faint);">Le pointage sera déverrouillé au démarrage du programme.</span>`
@@ -161,7 +161,18 @@ function attachPointageEvents() {
     session.heureFin = new Date().toISOString();
     await saveData();
     showToast('Heure de fin enregistrée — pointage prêt à enregistrer');
-    render();
+    const summary = document.getElementById('sessionSummary');
+    if (summary) {
+      const hours = sessionHours(session);
+      summary.textContent = 'Lieu : ' + (sessionLieu(session) || 'Non renseigné')
+        + (hours ? ' · Horaires : ' + hours : '');
+    }
+    const status = document.getElementById('sessionStatus');
+    if (status) {
+      status.innerHTML = `<span style="font-size:12px;color:var(--ink-faint);">Programme terminé : ${escapeHtml(sessionHours(session))}</span>`;
+    }
+    const saveBtn = document.getElementById('saveSession');
+    if (saveBtn) saveBtn.disabled = false;
   });
   const deleteSessBtn = document.getElementById('deleteSessionBtn');
   if (deleteSessBtn) deleteSessBtn.addEventListener('click', () => {
