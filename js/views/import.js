@@ -40,8 +40,8 @@ function renderImportZone() {
   if (state.importStep === 0) {
     return `<div class="drop-zone" id="dropZone">
       ${ICONS.upload}
-      <p style="margin:12px 0 4px;font-weight:700;">Cliquez pour choisir un fichier .xlsx ou .csv</p>
-      <p style="margin:0;color:var(--ink-faint);font-size:12.5px;">Vos données restent sur cet appareil</p>
+      <p style="margin:12px 0 4px;font-weight:700;">Cliquez pour importer le fichier .xlsx ou .csv des membres de la section</p>
+      <p style="margin:0;color:var(--ink-faint);font-size:12.5px;">Vos données restent synchronisées sur tout vos appareils</p>
       <input type="file" id="fileInput" accept=".xlsx,.xls,.csv" style="display:none;">
     </div>`;
   }
