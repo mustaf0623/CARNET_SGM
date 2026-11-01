@@ -63,7 +63,7 @@ function renderRapports() {
         <p style="font-size:12.5px;color:var(--ink-faint);line-height:1.6;">
           ${sessionId !== 'toutes' && scope !== 'global'
             ? 'Le rapport listera la présence de chaque membre pour cette séance précise, avec le taux de présence associé.'
-            : 'Le rapport inclura : effectifs, répartition Hommes/Femmes, taux de présence, taux d’absence et taux de participation — globaux ou filtrés selon la portée et la période choisies (année entière ou un mois précis).'}
+            : 'Le rapport inclura : effectifs, répartition Hommes/Femmes, taux de présence, taux d’absence et taux de participation globaux ou filtrés selon la portée et la période choisies (année entière ou un mois précis).'}
         </p>
         <div style="margin-top:18px;">
           <button class="btn btn-primary" id="genPdfBtn">${ICONS.download} Générer le PDF</button>
@@ -85,7 +85,7 @@ function renderRapports() {
     </div>
     <div class="card" style="margin-top:20px;">
       <h3 class="card-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
-        <span>Répertoire — absences consécutives</span>
+        <span>Répertoire d'absences consécutives</span>
         <span style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:var(--ink-dim);flex-wrap:wrap;">
           Programme
           <select id="watchlistProgramme" style="padding:5px 8px;">
@@ -100,7 +100,7 @@ function renderRapports() {
         ${watchlist.length ? watchlist.map(r => `<div class="ledger-row">
           <div style="flex:1;min-width:0;">
             <div class="prog-name">${escapeHtml(r.membre.prenom)} ${escapeHtml(r.membre.nom)}</div>
-            ${watchlistProgId === 'tous' ? `<div style="font-size:11.5px;color:var(--ink-faint);">${escapeHtml(r.programme.nom)}${r.lastDate ? ' — dernière séance pointée : ' + fmtDate(r.lastDate) : ''}</div>` : (r.lastDate ? `<div style="font-size:11.5px;color:var(--ink-faint);">Dernière séance pointée : ${fmtDate(r.lastDate)}</div>` : '')}
+            ${watchlistProgId === 'tous' ? `<div style="font-size:11.5px;color:var(--ink-faint);">${escapeHtml(r.programme.nom)}${r.lastDate ? ' dernière séance pointée : ' + fmtDate(r.lastDate) : ''}</div>` : (r.lastDate ? `<div style="font-size:11.5px;color:var(--ink-faint);">Dernière séance pointée : ${fmtDate(r.lastDate)}</div>` : '')}
           </div>
           <span class="pill" style="background:var(--terracotta-tint);border-color:var(--terracotta);color:var(--terracotta-dim);font-weight:700;white-space:nowrap;">${r.streak} absences</span>
         </div>`).join('') : emptyRow(`Aucun membre permanent avec ${threshold} absence${threshold > 1 ? 's' : ''} consécutive${threshold > 1 ? 's' : ''} ou plus.`)}
