@@ -139,7 +139,12 @@ async function pullFromSupabase() {
   const bureauMandats = (bMandatRes.data || []).map(r => ({ id: r.id, nom: r.nom, dateDebut: r.date_debut || '', dateFin: r.date_fin || '', actif: !!r.actif }));
   const bureauPostes = (bPosteRes.data || []).map(r => ({ id: r.id, nom: r.nom }));
   const bureauMembres = (bMembreRes.data || []).map(r => ({ id: r.id, mandatId: r.mandat_id, membreId: r.membre_id, posteId: r.poste_id }));
-  const bureauReunions = (bReunionRes.data || []).map(r => ({ id: r.id, mandatId: r.mandat_id, numero: r.numero, date: r.date, ordreDuJour: r.ordre_du_jour || '', pvTexte: r.pv_texte || '', pvLien: r.pv_lien || '' }));
+  const bureauReunions = (bReunionRes.data || []).map(r => ({
+    id: r.id, mandatId: r.mandat_id, numero: r.numero, date: r.date,
+    ordreDuJour: r.ordre_du_jour || '', pvTexte: r.pv_texte || '', pvLien: r.pv_lien || '',
+    heureDebut: r.heure_debut || '', heureFin: r.heure_fin || '',
+    presidentSeanceMembreId: r.president_seance_membre_id || '',
+  }));
   const bureauPointages = (bPointageRes.data || []).map(r => ({ id: r.id, reunionId: r.reunion_id, membreId: r.membre_id, statut: r.statut }));
   const bureauPresenceExtras = (bExtraRes.data || []).map(r => ({ id: r.id, reunionId: r.reunion_id, name: r.name, poste: r.poste || '', statut: r.statut || 'present' }));
   return { profile: { name }, account, programmes, membres, sessions, pointages, bureauMandats, bureauPostes, bureauMembres, bureauReunions, bureauPointages, bureauPresenceExtras };
@@ -228,7 +233,12 @@ async function pushToSupabase() {
     snapshotMaps.bureauMandats = await syncTable('bureau_mandats', state.data.bureauMandats, m => ({ id: m.id, nom: m.nom, date_debut: m.dateDebut || null, date_fin: m.dateFin || null, actif: !!m.actif }), snapshotMaps.bureauMandats);
     snapshotMaps.bureauPostes = await syncTable('bureau_postes', state.data.bureauPostes, p => ({ id: p.id, nom: p.nom }), snapshotMaps.bureauPostes);
     snapshotMaps.bureauMembres = await syncTable('bureau_membres', state.data.bureauMembres, m => ({ id: m.id, mandat_id: m.mandatId, membre_id: m.membreId, poste_id: m.posteId }), snapshotMaps.bureauMembres);
-    snapshotMaps.bureauReunions = await syncTable('bureau_reunions', state.data.bureauReunions, r => ({ id: r.id, mandat_id: r.mandatId, numero: r.numero, date: r.date, ordre_du_jour: r.ordreDuJour || '', pv_texte: r.pvTexte || '', pv_lien: r.pvLien || '' }), snapshotMaps.bureauReunions);
+    snapshotMaps.bureauReunions = await syncTable('bureau_reunions', state.data.bureauReunions, r => ({
+      id: r.id, mandat_id: r.mandatId, numero: r.numero, date: r.date,
+      ordre_du_jour: r.ordreDuJour || '', pv_texte: r.pvTexte || '', pv_lien: r.pvLien || '',
+      heure_debut: r.heureDebut || null, heure_fin: r.heureFin || null,
+      president_seance_membre_id: r.presidentSeanceMembreId || null,
+    }), snapshotMaps.bureauReunions);
     snapshotMaps.bureauPointages = await syncTable('bureau_pointages', state.data.bureauPointages, p => ({ id: p.id, reunion_id: p.reunionId, membre_id: p.membreId, statut: p.statut }), snapshotMaps.bureauPointages);
     snapshotMaps.bureauPresenceExtras = await syncTable('bureau_presence_extras', state.data.bureauPresenceExtras || [], x => ({ id: x.id, reunion_id: x.reunionId, name: x.name, poste: x.poste || '', statut: x.statut || 'present' }), snapshotMaps.bureauPresenceExtras);
     const { error: profileError } = await sb.from('profiles').upsert({ id: sbUser.id, name: state.data.profile.name });

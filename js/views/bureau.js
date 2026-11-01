@@ -138,12 +138,14 @@ function renderBureauReunions(d, mandat) {
           const pts = (d.bureauPointages || []).filter(p => p.reunionId === r.id);
           const extraPresents = (d.bureauPresenceExtras || []).filter(x => x.reunionId === r.id && x.statut === 'present').length;
           const present = pts.filter(p => p.statut === 'present').length + extraPresents;
+          const president = (d.membres || []).find(m => m.id === r.presidentSeanceMembreId);
           const odjLines = (r.ordreDuJour || '').split('\n').map(l => l.trim()).filter(Boolean);
           const odjPreview = odjLines.length ? odjLines[0] + (odjLines.length > 1 ? ` (+${odjLines.length - 1} autre${odjLines.length > 2 ? 's' : ''} point${odjLines.length > 2 ? 's' : ''})` : '') : '';
+          const horaires = [r.heureDebut, r.heureFin].filter(Boolean).map(h => h.slice(0, 5)).join(' – ');
           return `<div class="ledger-row" style="cursor:pointer;" data-open-reunion="${r.id}">
             <div style="flex:1;">
               <div class="prog-name">Réunion n°${r.numero}${odjPreview ? ' — ' + escapeHtml(odjPreview) : ''}</div>
-              <div style="font-size:11.5px;color:var(--ink-faint);">${fmtDate(r.date)} · ${present} présent(s) / ${pts.length + extraPresents} pointé(s)${r.pvTexte || r.pvLien ? ' · PV disponible' : ''}</div>
+              <div style="font-size:11.5px;color:var(--ink-faint);">${fmtDate(r.date)}${horaires ? ' · ' + escapeHtml(horaires) : ''}${president ? ' · Présidence : ' + escapeHtml(president.prenom + ' ' + president.nom) : ''} · ${present} présent(s) / ${pts.length + extraPresents} pointé(s)${r.pvTexte || r.pvLien ? ' · PV disponible' : ''}</div>
             </div>
             <button class="edit-name-btn delete-reunion-btn" data-id="${r.id}" style="color:var(--terracotta);">supprimer</button>
           </div>`;
@@ -157,19 +159,31 @@ function renderBureauReunionDetail(d, mandat) {
   const r = d.bureauReunions.find(x => x.id === state.bureauReunionId);
   if (!r) { state.bureauReunionId = null; return renderBureauReunions(d, mandat); }
   const membres = bureauMembresForMandat(d, r.mandatId);
+  const presidentSeanceMembreId = r.presidentSeanceMembreId || '';
   const pointagesMap = new Map((d.bureauPointages || []).filter(p => p.reunionId === r.id).map(p => [p.membreId, p.statut]));
   const extraPresences = bureauExtraPresencesForReunion(d, r.id);
   return `
     <div class="card">
       <button class="btn btn-ghost btn-sm" id="backToReunionsBtn">← Retour aux réunions</button>
       <h3 class="card-title" style="margin-top:12px;">Réunion n°${r.numero}</h3>
-      <div class="field" style="margin-top:12px;max-width:220px;"><label>Date</label><input type="date" id="reunionDateInput" value="${r.date}"></div>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px;">
+        <div class="field"><label>Date</label><input type="date" id="reunionDateInput" value="${escapeHtml(r.date)}"></div>
+        <div class="field"><label>Heure de début</label><input type="time" id="reunionHeureDebutInput" value="${escapeHtml((r.heureDebut || '').slice(0, 5))}"></div>
+        <div class="field"><label>Heure de fin</label><input type="time" id="reunionHeureFinInput" value="${escapeHtml((r.heureFin || '').slice(0, 5))}"></div>
+      </div>
+      <div class="field" style="margin-top:10px;">
+        <label>Président de séance (membre du Bureau)</label>
+        <select id="reunionPresidentSeance" style="width:100%;max-width:420px;">
+          <option value="">Choisir le président de séance…</option>
+          ${membres.map(item => `<option value="${escapeHtml(item.membreId)}" ${presidentSeanceMembreId === item.membreId ? 'selected' : ''}>${escapeHtml(item.membre.prenom)} ${escapeHtml(item.membre.nom)}${item.poste ? ' — ' + escapeHtml(item.poste.nom) : ''}</option>`).join('')}
+        </select>
+      </div>
       <div class="field" style="margin-top:10px;">
         <label>Ordre du jour</label>
         <textarea id="reunionOdjInput" placeholder="Un point par ligne…" style="width:100%;min-height:110px;padding:10px 12px;font-family:inherit;font-size:13.5px;line-height:1.7;border-radius:10px;border:1px solid var(--line);background:var(--card);color:var(--ink);">${escapeHtml(r.ordreDuJour || '')}</textarea>
         <div style="font-size:11px;color:var(--ink-faint);margin-top:4px;">Chaque ligne devient un point distinct de l’ordre du jour, y compris dans le PDF.</div>
       </div>
-      <button class="btn btn-ghost btn-sm" id="saveReunionInfoBtn" style="margin-top:6px;">Enregistrer la date / l’ordre du jour</button>
+      <button class="btn btn-ghost btn-sm" id="saveReunionInfoBtn" style="margin-top:6px;">Enregistrer les informations de la réunion</button>
 
       <div class="card-title" style="font-size:14px;margin:20px 0 8px;">Pointage des membres du Bureau</div>
       <div id="bureauMemberList">
@@ -344,7 +358,13 @@ function attachBureauEvents() {
     const date = document.getElementById('newReunionDate').value || todayISO();
     const ordreDuJour = '';
     const numero = nextReunionNumero(d, mandat.id);
-    const reunion = { id: uid(), mandatId: mandat.id, numero, date, ordreDuJour, pvTexte: '', pvLien: '' };
+    const bureauMembres = bureauMembresForMandat(d, mandat.id);
+    const presidentDefault = bureauMembres.find(item => item.poste
+      && String(item.poste.nom || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes('president'));
+    const reunion = {
+      id: uid(), mandatId: mandat.id, numero, date, ordreDuJour, pvTexte: '', pvLien: '',
+      heureDebut: '', heureFin: '', presidentSeanceMembreId: presidentDefault ? presidentDefault.membreId : '',
+    };
     d.bureauReunions.push(reunion);
     await saveData();
     state.bureauReunionId = reunion.id;
@@ -398,6 +418,9 @@ function attachBureauEvents() {
     if (!r) return;
     r.date = document.getElementById('reunionDateInput').value || r.date;
     r.ordreDuJour = document.getElementById('reunionOdjInput').value.trim();
+    r.heureDebut = document.getElementById('reunionHeureDebutInput').value || '';
+    r.heureFin = document.getElementById('reunionHeureFinInput').value || '';
+    r.presidentSeanceMembreId = document.getElementById('reunionPresidentSeance').value || '';
     await saveData(); showToast('Réunion mise à jour'); render();
   });
 

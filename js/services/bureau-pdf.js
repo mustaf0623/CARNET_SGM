@@ -24,7 +24,7 @@ function drawRichPvLine(doc, line, x, y, maxWidth, fontSize, color, pageH, margi
     doc.setTextColor(...color);
     const lines = doc.splitTextToSize(title, maxWidth);
     lines.forEach(textLine => {
-      if (y > pageH - margin - 12) { doc.addPage(); y = margin + 8; }
+      if (y > pageH - margin - 32) { doc.addPage(); y = margin + 8; }
       doc.text(textLine, x, y);
       y += level === 1 ? 7 : 6;
     });
@@ -62,7 +62,7 @@ function drawRichPvLine(doc, line, x, y, maxWidth, fontSize, color, pageH, margi
     const width = doc.getTextWidth(part.text);
     if (currentLineParts.length && currentLineWidth + width + 1.2 > maxWidth) {
       flushLine();
-      if (lineY > pageH - margin - 12) { doc.addPage(); lineY = margin + 8; }
+      if (lineY > pageH - margin - 32) { doc.addPage(); lineY = margin + 8; }
     }
     currentLineParts.push(part);
     currentLineWidth += width + 1.2;
@@ -92,6 +92,8 @@ function buildProcesVerbalPdf(r, mandat, membresAssoc, d) {
   doc.setFontSize(9); doc.setTextColor(230, 240, 235);
   doc.text(`Réunion n°${r.numero}`, pageW - margin, 15, { align: 'right' });
   doc.text(fmtDate(r.date), pageW - margin, 21, { align: 'right' });
+  const horaires = [r.heureDebut, r.heureFin].filter(Boolean).map(h => h.slice(0, 5));
+  if (horaires.length) doc.text(`Horaire : ${horaires.join(' – ')}`, pageW - margin, 27, { align: 'right' });
 
   let y = 44;
   doc.setTextColor(...ink);
@@ -132,12 +134,12 @@ function buildProcesVerbalPdf(r, mandat, membresAssoc, d) {
   const paragraphs = bodyText.split('\n');
   paragraphs.forEach(p => {
     const text = p || ' ';
-    if (y > pageH - margin - 16) { doc.addPage(); y = margin + 8; }
+    if (y > pageH - margin - 32) { doc.addPage(); y = margin + 8; }
     y = drawRichPvLine(doc, text, margin, y, contentW, 10.5, ink, pageH, margin);
   });
 
   if (r.pvLien && r.pvTexte && r.pvTexte.trim()) {
-    if (y > pageH - margin - 16) { doc.addPage(); y = margin; }
+    if (y > pageH - margin - 32) { doc.addPage(); y = margin; }
     y += 4;
     doc.setFont('helvetica', 'italic'); doc.setFontSize(9); doc.setTextColor(...faint);
     doc.text(`Document complémentaire : ${r.pvLien}`, margin, y);
@@ -145,10 +147,15 @@ function buildProcesVerbalPdf(r, mandat, membresAssoc, d) {
 
   // Pied de page
   const footY = pageH - 12;
-  doc.setDrawColor(214, 219, 204); doc.line(margin, footY - 6, pageW - margin, footY - 6);
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...faint);
-  doc.text(`Généré le ${fmtDate(todayISO())} à ${nowTime()}`, margin, footY);
-  if (state.data.profile.name) doc.text(`Signataire : ${state.data.profile.name}`, pageW - margin, footY, { align: 'right' });
+  const president = (d.membres || []).find(m => m.id === r.presidentSeanceMembreId);
+  const presidentName = president ? `${president.prenom} ${president.nom}`.trim() : '—';
+  const secretaryName = state.data.profile.name || '—';
+  doc.setDrawColor(214, 219, 204); doc.line(margin, footY - 20, pageW - margin, footY - 20);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(...ink);
+  doc.text(`Secrétaire de séance : ${secretaryName}`, margin, footY - 14);
+  doc.text(`Président de séance : ${presidentName}`, margin, footY - 8);
+  doc.setFontSize(8); doc.setTextColor(...faint);
+  doc.text(`Généré le ${fmtDate(todayISO())} à ${nowTime()}`, pageW - margin, footY, { align: 'right' });
 
   doc.save(`pv-reunion-${r.numero}-${(mandat ? mandat.nom : '').replace(/\s+/g, '_')}.pdf`);
 }
