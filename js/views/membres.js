@@ -6,32 +6,89 @@ function normalizeExportSearch(value) {
     .replace(/[\u0300-\u036f]/g, '').trim();
 }
 
+function membersInMembreScope(members, readOnly, account, programmes) {
+  if (!readOnly || account.scopeGlobal) return members;
+  return members.filter(member =>
+    programmes.some(programme => memberInProgramme(member, programme.id))
+  );
+}
+
+function filterMembreDirectory(members, programmes) {
+  const query = normalizeExportSearch(state.membreSearch || '').split(/\s+/).filter(Boolean);
+  const collator = new Intl.Collator('fr', { sensitivity: 'base', numeric: true });
+  const filtered = members.filter(member => {
+    const category = normaliseCategorie(member.categorie)
+      || String(member.categorie || '').trim()
+      || 'Non définie';
+    const status = memberActivityStatus(member);
+    if (state.membreCategoryFilter !== 'toutes' && category !== state.membreCategoryFilter) return false;
+    if (state.membreActivityFilter !== 'toutes' && status !== state.membreActivityFilter) return false;
+    if (state.membreTypeFilter === 'permanent' && member.ap) return false;
+    if (state.membreTypeFilter === 'ap' && !member.ap) return false;
+    if (state.membreProgrammeFilter !== 'tous'
+      && !memberInProgramme(member, state.membreProgrammeFilter)) return false;
+    const programmeNames = member.ap || member.allProgrammes
+      ? 'Tous les programmes'
+      : (member.programmeIds || []).map(id => (programmes.find(programme => programme.id === id) || {}).nom).filter(Boolean).join(' ');
+    const activityLabels = {
+      actif: 'Actif', moyen: 'Moyen', pasDuTout: 'Pas du tout', nonRenseigne: 'Non renseigné',
+    };
+    const searchable = normalizeExportSearch([
+      member.prenom, member.nom, member.sexe === 'H' ? 'Homme' : 'Femme',
+      category, member.ap ? 'Ponctuel AP' : 'Permanent', activityLabels[status],
+      programmeNames, ...Object.entries(member.extra || {}).flat(),
+    ].join(' '));
+    return query.every(term => searchable.includes(term));
+  });
+  const byName = (a, b) => collator.compare(`${a.nom || ''} ${a.prenom || ''}`, `${b.nom || ''} ${b.prenom || ''}`);
+  return filtered.sort((a, b) => {
+    if (state.membreSort === 'categorie') {
+      return collator.compare(
+        String(normaliseCategorie(a.categorie) || a.categorie || 'Non définie'),
+        String(normaliseCategorie(b.categorie) || b.categorie || 'Non définie')
+      ) || byName(a, b);
+    }
+    if (state.membreSort === 'activite') {
+      const order = { actif: 0, moyen: 1, pasDuTout: 2, nonRenseigne: 3 };
+      return order[memberActivityStatus(a)] - order[memberActivityStatus(b)] || byName(a, b);
+    }
+    return byName(a, b);
+  });
+}
+
 function renderMembres() {
   const d = state.data;
   const readOnly = isPresidentReadOnly();
   const allowedProgrammes = d.programmes.filter(programme => accountCanReadProgramme(programme.id));
-  const exportCategories = Array.from(new Set(d.membres.map(member =>
+  const directoryMembers = membersInMembreScope(d.membres, readOnly, state.account, allowedProgrammes);
+  const directoryCategories = Array.from(new Set(directoryMembers.map(member =>
     normaliseCategorie(member.categorie) || String(member.categorie || '').trim() || 'Non définie'
   ))).sort((a, b) => a.localeCompare(b, 'fr'));
+  if (!directoryCategories.includes(state.membreCategoryFilter)) state.membreCategoryFilter = 'toutes';
+  if (state.membreProgrammeFilter !== 'tous'
+    && !allowedProgrammes.some(programme => programme.id === state.membreProgrammeFilter)) {
+    state.membreProgrammeFilter = 'tous';
+  }
+  const filteredDirectoryMembers = filterMembreDirectory(directoryMembers, allowedProgrammes);
   return `
     <div class="page-head">
       <div>
         <div class="eyebrow">Base de données</div>
         <h1 class="page-title">Membres &amp; programmes</h1>
-        <p class="page-sub">${readOnly ? 'Consultez les membres et les programmes de votre portée autorisée.' : 'Gérez vos programmes, ajoutez des membres un par un ou importez un fichier Excel existant.'}</p>
+        <p class="page-sub">${readOnly ? 'Consultez et recherchez les membres de votre portée autorisée par nom, catégorie, activité, type ou programme.' : 'Gérez vos programmes, ajoutez des membres un par un ou importez un fichier Excel existant.'}</p>
       </div>
     </div>
     <div class="grid grid-2" style="align-items:start;">
       <div class="card">
         <h3 class="card-title">Programmes</h3>
-        <div class="card-sub">${d.programmes.length} programme${d.programmes.length > 1 ? 's' : ''}</div>
-        <div class="ledger">${d.programmes.map(p => {
+        <div class="card-sub">${allowedProgrammes.length} programme${allowedProgrammes.length > 1 ? 's' : ''}${readOnly ? ' autorisé(s)' : ''}</div>
+        <div class="ledger">${allowedProgrammes.map(p => {
           const prio = p.prioriteCategories || [];
           const cats = ['Homme', 'Femme', 'Cadet', 'Cadette', 'Père', 'Mère'];
           return `<div class="ledger-row" style="flex-direction:column;align-items:stretch;gap:8px;">
             <div style="display:flex;align-items:center;gap:14px;">
               <div class="prog-name" style="flex:1;">${escapeHtml(p.nom)}</div>
-              <div style="color:var(--ink-faint);font-size:12px;" class="mono">${d.membres.filter(m => memberInProgramme(m, p.id)).length} membres</div>
+              <div style="color:var(--ink-faint);font-size:12px;" class="mono">${directoryMembers.filter(m => memberInProgramme(m, p.id)).length} membres</div>
               ${readOnly ? '' : `<button class="edit-name-btn delete-prog-btn" data-id="${p.id}" style="color:var(--terracotta);">supprimer</button>`}
             </div>
             ${readOnly ? '' : `<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:11.5px;color:var(--ink-faint);">
@@ -100,30 +157,58 @@ function renderMembres() {
 
     <div class="card" style="margin-top:16px;">
       <h3 class="card-title">${readOnly ? 'Membres de la portée autorisée' : 'Tous les membres'}</h3>
-      <div class="card-sub">${d.membres.length} au total${d.membres.some(m => m.ap) ? ' · ' + d.membres.filter(m => m.ap).length + ' membre(s) ponctuel(s) (AP)' : ''}</div>
-      <div style="margin:12px 0 14px;">
-        <input type="text" id="membreSearch" placeholder="Rechercher un membre (nom, prénom...)" value="${escapeHtml(state.membreSearch || '')}" style="width:100%;">
+      <div class="card-sub">${filteredDirectoryMembers.length} membre(s) affiché(s) sur ${directoryMembers.length} de la portée${directoryMembers.some(m => m.ap) ? ' · ' + directoryMembers.filter(m => m.ap).length + ' membre(s) ponctuel(s) (AP)' : ''}</div>
+      <div class="grid grid-2" style="margin:12px 0 14px;gap:10px;">
+        <div class="field" style="grid-column:1/-1;">
+          <label for="membreSearch">Recherche (noms, programmes et informations complémentaires)</label>
+          <input type="search" id="membreSearch" placeholder="Ex. prénom nom, catégorie, statut ou valeur importée" value="${escapeHtml(state.membreSearch || '')}" style="width:100%;">
+        </div>
+        <div class="field"><label for="membreCategoryFilter">Catégorie</label>
+          <select id="membreCategoryFilter"><option value="toutes">Toutes les catégories</option>${directoryCategories.map(category => `<option value="${escapeHtml(category)}" ${state.membreCategoryFilter === category ? 'selected' : ''}>${escapeHtml(category)}</option>`).join('')}</select>
+        </div>
+        <div class="field"><label for="membreActivityFilter">Statut d’activité</label>
+          <select id="membreActivityFilter">
+            <option value="toutes" ${state.membreActivityFilter === 'toutes' ? 'selected' : ''}>Tous les statuts</option>
+            <option value="actif" ${state.membreActivityFilter === 'actif' ? 'selected' : ''}>Actif</option>
+            <option value="moyen" ${state.membreActivityFilter === 'moyen' ? 'selected' : ''}>Moyen</option>
+            <option value="pasDuTout" ${state.membreActivityFilter === 'pasDuTout' ? 'selected' : ''}>Pas du tout</option>
+            <option value="nonRenseigne" ${state.membreActivityFilter === 'nonRenseigne' ? 'selected' : ''}>Non renseigné</option>
+          </select>
+        </div>
+        <div class="field"><label for="membreTypeFilter">Type de membre</label>
+          <select id="membreTypeFilter">
+            <option value="tous" ${state.membreTypeFilter === 'tous' ? 'selected' : ''}>Tous les types</option>
+            <option value="permanent" ${state.membreTypeFilter === 'permanent' ? 'selected' : ''}>Permanent</option>
+            <option value="ap" ${state.membreTypeFilter === 'ap' ? 'selected' : ''}>Ponctuel (AP)</option>
+          </select>
+        </div>
+        <div class="field"><label for="membreProgrammeFilter">Programme</label>
+          <select id="membreProgrammeFilter"><option value="tous">${readOnly ? 'Tous les programmes autorisés' : 'Tous les programmes'}</option>${allowedProgrammes.map(programme => `<option value="${programme.id}" ${state.membreProgrammeFilter === programme.id ? 'selected' : ''}>${escapeHtml(programme.nom)}</option>`).join('')}</select>
+        </div>
+        <div class="field"><label for="membreSort">Trier par</label>
+          <select id="membreSort">
+            <option value="nom" ${state.membreSort === 'nom' ? 'selected' : ''}>Nom puis prénom</option>
+            <option value="categorie" ${state.membreSort === 'categorie' ? 'selected' : ''}>Catégorie puis nom</option>
+            <option value="activite" ${state.membreSort === 'activite' ? 'selected' : ''}>Statut d’activité puis nom</option>
+          </select>
+        </div>
+        <div style="display:flex;align-items:end;"><button type="button" class="btn btn-ghost btn-sm" id="resetMembreFilters">Effacer les filtres</button></div>
       </div>
       ${(() => {
-        const q = (state.membreSearch || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-        const filtered = q ? d.membres.filter(m => {
-          if (norm(`${m.prenom} ${m.nom}`).includes(q)) return true;
-          return Object.values(m.extra || {}).some(v => norm(v).includes(q));
-        }) : d.membres;
-        if (!d.membres.length) return emptyRow('Aucun membre pour l’instant.');
-        if (!filtered.length) return emptyRow('Aucun membre ne correspond à cette recherche.');
-        return `<table class="data-table"><thead><tr><th>Nom</th><th>Sexe</th><th>Programmes</th>${readOnly ? '' : '<th></th>'}</tr></thead><tbody>
-        ${filtered.map(m => {
+        if (!directoryMembers.length) return emptyRow('Aucun membre dans cette portée autorisée.');
+        if (!filteredDirectoryMembers.length) return emptyRow('Aucun membre ne correspond à ces critères.');
+        return `<div class="table-wrap"><table class="data-table"><thead><tr><th>Nom</th><th>Sexe</th><th>Catégorie</th><th>Activité</th><th>Programmes</th>${readOnly ? '' : '<th></th>'}</tr></thead><tbody>
+        ${filteredDirectoryMembers.map(m => {
           const memberProgrammes = allowedProgrammes.filter(programme =>
             m.ap || m.allProgrammes || (m.programmeIds || []).includes(programme.id)
           );
           const programmeLabels = m.ap || m.allProgrammes
             ? `<span class="pill">${readOnly && !state.account.scopeGlobal ? 'Tous les programmes autorisés' : 'Tous les programmes'}</span>`
             : memberProgrammes.map(programme => `<span class="pill">${escapeHtml(programme.nom)}</span>`).join('');
-          return `<tr><td><button class="member-name-link" data-id="${m.id}" style="background:none;border:none;padding:0;color:var(--ink);font-weight:700;cursor:pointer;text-decoration:underline;text-decoration-color:var(--line-strong);">${escapeHtml(m.prenom)} ${escapeHtml(m.nom)}</button>${m.ap ? ` <span class="pill" style="background:var(--gold-tint);border-color:var(--gold);color:var(--gold);">AP</span>` : ''}${m.extra && Object.keys(m.extra).length ? ` <span class="pill" style="background:var(--gold-tint);border-color:var(--gold);color:var(--gold);font-size:10px;" title="Informations importées disponibles">i</span>` : ''}</td><td>${m.sexe === 'H' ? 'Homme' : 'Femme'}</td><td>${programmeLabels || '—'}</td>${readOnly ? '' : `<td><button class="edit-name-btn delete-membre-btn" data-id="${m.id}" style="color:var(--terracotta);">supprimer</button></td>`}</tr>`;
+          const activityLabels = { actif: 'Actif', moyen: 'Moyen', pasDuTout: 'Pas du tout', nonRenseigne: 'Non renseigné' };
+          return `<tr><td><button class="member-name-link" data-id="${m.id}" style="background:none;border:none;padding:0;color:var(--ink);font-weight:700;cursor:pointer;text-decoration:underline;text-decoration-color:var(--line-strong);">${escapeHtml(m.prenom)} ${escapeHtml(m.nom)}</button>${m.ap ? ` <span class="pill" style="background:var(--gold-tint);border-color:var(--gold);color:var(--gold);">AP</span>` : ''}${m.extra && Object.keys(m.extra).length ? ` <span class="pill" style="background:var(--gold-tint);border-color:var(--gold);color:var(--gold);font-size:10px;" title="Informations importées disponibles">i</span>` : ''}</td><td>${m.sexe === 'H' ? 'Homme' : 'Femme'}</td><td>${escapeHtml(normaliseCategorie(m.categorie) || m.categorie || 'Non définie')}</td><td>${activityLabels[memberActivityStatus(m)]}</td><td>${programmeLabels || '—'}</td>${readOnly ? '' : `<td><button class="edit-name-btn delete-membre-btn" data-id="${m.id}" style="color:var(--terracotta);">supprimer</button></td>`}</tr>`;
         }).join('')}
-      </tbody></table>`;
+      </tbody></table></div>`;
       })()}
     </div>
 
@@ -241,6 +326,30 @@ function attachMembresEvents() {
     render();
     const again = document.getElementById('membreSearch');
     if (again) { again.focus(); again.setSelectionRange(pos, pos); }
+  });
+  const directoryFilters = {
+    membreCategoryFilter: 'membreCategoryFilter',
+    membreActivityFilter: 'membreActivityFilter',
+    membreTypeFilter: 'membreTypeFilter',
+    membreProgrammeFilter: 'membreProgrammeFilter',
+    membreSort: 'membreSort',
+  };
+  Object.entries(directoryFilters).forEach(([stateKey, elementId]) => {
+    const select = document.getElementById(elementId);
+    if (select) select.addEventListener('change', event => {
+      state[stateKey] = event.target.value;
+      render();
+    });
+  });
+  const resetDirectoryFilters = document.getElementById('resetMembreFilters');
+  if (resetDirectoryFilters) resetDirectoryFilters.addEventListener('click', () => {
+    state.membreSearch = '';
+    state.membreCategoryFilter = 'toutes';
+    state.membreActivityFilter = 'toutes';
+    state.membreTypeFilter = 'tous';
+    state.membreProgrammeFilter = 'tous';
+    state.membreSort = 'nom';
+    render();
   });
 
   // "Tous les programmes" et la sélection individuelle sont mutuellement
