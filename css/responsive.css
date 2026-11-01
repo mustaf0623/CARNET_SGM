@@ -6,22 +6,31 @@
   .brand{ border:none; padding:0; margin:0; margin-right:14px; }
   .brand-sub{ display:none; }
   nav.tabs{ flex-direction:row; }
-  .sidebar-footer{
-    display:flex;
-    align-items:center;
-    justify-content:flex-end;
-    margin-left:auto;
-    padding-top:0;
-    border-top:none;
+  .sidebar-footer{ 
+    display:flex; 
+    align-items:center; 
+    justify-content:flex-end; 
+    margin-left:auto; 
+    padding-top:0; 
+    border-top:none; 
   }
   .sidebar-org, .user-chip{ display:none; }
   .sidebar-footer .signOutBtn{
-    margin:0;
-    padding:6px 10px;
-    border:1px solid rgba(237,241,229,0.2);
-    border-radius:999px;
-    color:var(--cover-ink);
+    margin:0; 
+    padding:6px 10px; 
+    border:1px solid rgba(237,241,229,0.2); 
+    border-radius:999px; 
+    color:var(--cover-ink); 
     background:rgba(255,255,255,0.08);
   }
   main{ padding:22px 18px 50px; }
+  .stat-card.stat-gender{ padding-right:12px; padding-left:12px; }
+  .stat-card.stat-gender .stat-value{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:0.22em;
+    white-space:nowrap;
+    font-size:clamp(16px, 5vw, 24px);
+  }
 }
