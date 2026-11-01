@@ -67,22 +67,6 @@ function supervisionBreakdowns(data, sessions) {
   };
 }
 
-function supervisionActivityStatus(member) {
-  const extra = member.extra || {};
-  const activityFields = Object.entries(extra).filter(([key]) => {
-    const normalizedKey = key.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    return normalizedKey.includes('activite');
-  });
-  for (const [, value] of activityFields) {
-    const normalizedValue = String(value || '').toLowerCase().normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
-    if (normalizedValue === 'actif' || normalizedValue === 'active') return 'actif';
-    if (normalizedValue === 'moyen' || normalizedValue === 'moyenne') return 'moyen';
-    if (normalizedValue === 'pas du tout' || normalizedValue.startsWith('pas du tout ')) return 'pasDuTout';
-  }
-  return 'nonRenseigne';
-}
-
 function supervisionActivityBreakdown(members) {
   const categories = new Map();
   const totals = { actif: 0, moyen: 0, pasDuTout: 0, nonRenseigne: 0, total: 0 };
@@ -93,7 +77,7 @@ function supervisionActivityBreakdown(members) {
     const row = categories.get(category) || {
       name: category, actif: 0, moyen: 0, pasDuTout: 0, nonRenseigne: 0, total: 0,
     };
-    const status = supervisionActivityStatus(member);
+    const status = memberActivityStatus(member);
     row[status]++;
     row.total++;
     totals[status]++;

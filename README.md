@@ -35,6 +35,9 @@ js/
   existant fonctionne tel quel. **L'ordre des `<script>` dans `index.html` compte.**
 - Convention d'un écran : `renderXxx()` (retourne le HTML) + `attachXxxEvents()` (branche les
   événements), dans le même fichier de `views/`.
+- Dans **Membres**, l'export de la base permet de combiner recherche et filtres, de trier les
+  résultats et de produire un classeur Excel avec la liste détaillée et une synthèse par catégorie
+  et statut d'activité.
 - Pas de `confirm()` / `prompt()` natifs (ignorés sur PWA iOS installée) : utiliser
   `openConfirm()` de `components/confirm-modal.js`.
 

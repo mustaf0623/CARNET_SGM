@@ -1,10 +1,18 @@
 /* js/views/membres.js — Onglet Membres (liste, ajout, filtres, export) */
 
 /* ================= MEMBRES ================= */
+function normalizeExportSearch(value) {
+  return String(value || '').toLowerCase().normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '').trim();
+}
+
 function renderMembres() {
   const d = state.data;
   const readOnly = isPresidentReadOnly();
   const allowedProgrammes = d.programmes.filter(programme => accountCanReadProgramme(programme.id));
+  const exportCategories = Array.from(new Set(d.membres.map(member =>
+    normaliseCategorie(member.categorie) || String(member.categorie || '').trim() || 'Non définie'
+  ))).sort((a, b) => a.localeCompare(b, 'fr'));
   return `
     <div class="page-head">
       <div>
@@ -121,9 +129,29 @@ function renderMembres() {
 
     ${readOnly ? '' : `<div class="card" style="margin-top:16px;">
       <h3 class="card-title">Exporter la base</h3>
-      <div class="card-sub">Choisissez les colonnes à inclure, affinez les filtres si besoin, puis exportez.</div>
+      <div class="card-sub">Combinez la recherche et les filtres, choisissez les colonnes, puis exportez les membres correspondants.</div>
+
+      <div class="field" style="margin-top:14px;">
+        <label for="exportSearch">Recherche dans la base</label>
+        <input type="search" id="exportSearch" placeholder="Nom, prénom, programme ou information complémentaire…" style="width:100%;">
+      </div>
+      <div style="display:flex;gap:12px;align-items:end;flex-wrap:wrap;margin-top:10px;">
+        <div class="field">
+          <label for="exportSort">Trier les résultats</label>
+          <select id="exportSort">
+            <option value="nom">Nom puis prénom</option>
+            <option value="categorie">Catégorie puis nom</option>
+            <option value="activite">Statut d’activité puis nom</option>
+          </select>
+        </div>
+        <strong id="exportPreviewCount" aria-live="polite" style="font-size:13px;color:var(--emerald-dim);padding-bottom:8px;"></strong>
+      </div>
 
       <div class="card-sub" style="margin-top:14px;font-weight:700;color:var(--ink-dim);">Colonnes</div>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <button type="button" class="btn btn-ghost btn-sm" data-export-check-group="exportColCheckbox" data-export-check-action="all">Tout sélectionner</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-export-check-group="exportColCheckbox" data-export-check-action="none">Tout désélectionner</button>
+      </div>
       <div class="extra-info-grid" style="margin-top:8px;max-height:none;">
         ${[{ key: '__prenom', label: 'Prénom' }, { key: '__nom', label: 'Nom' }, { key: '__sexe', label: 'Sexe' }, { key: '__categorie', label: 'Catégorie' }, { key: '__type', label: 'Type (Permanent/AP)' }, { key: '__programmes', label: 'Programmes' }]
           .map(f => `<label style="display:flex;align-items:center;gap:6px;background:var(--card-2);border:1px solid var(--line);border-radius:10px;padding:8px 9px;font-size:12px;cursor:pointer;"><input type="checkbox" class="exportColCheckbox" value="${escapeHtml(f.key)}" checked>${escapeHtml(f.label)}</label>`).join('')}
@@ -133,12 +161,20 @@ function renderMembres() {
       <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">
         <div style="border:1px solid var(--line);border-radius:10px;padding:9px 12px;">
           <div style="font-size:12.5px;font-weight:700;margin-bottom:7px;">Catégorie</div>
+          <div style="display:flex;gap:8px;margin-bottom:8px;">
+            <button type="button" class="btn btn-ghost btn-sm" data-export-check-group="exportCatFilter" data-export-check-action="all">Tout</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-export-check-group="exportCatFilter" data-export-check-action="none">Aucun</button>
+          </div>
           <div style="display:flex;flex-wrap:wrap;gap:12px;font-size:12px;">
-            ${['Homme', 'Femme', 'Cadet', 'Cadette', 'Père', 'Mère'].map(c => `<label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" class="exportCatFilter" value="${c}" checked>${c}</label>`).join('')}
+            ${exportCategories.map(category => `<label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" class="exportCatFilter" value="${escapeHtml(category)}" checked>${escapeHtml(category)}</label>`).join('')}
           </div>
         </div>
         <div style="border:1px solid var(--line);border-radius:10px;padding:9px 12px;">
           <div style="font-size:12.5px;font-weight:700;margin-bottom:7px;">Type</div>
+          <div style="display:flex;gap:8px;margin-bottom:8px;">
+            <button type="button" class="btn btn-ghost btn-sm" data-export-check-group="exportTypeFilter" data-export-check-action="all">Tout</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-export-check-group="exportTypeFilter" data-export-check-action="none">Aucun</button>
+          </div>
           <div style="display:flex;flex-wrap:wrap;gap:12px;font-size:12px;">
             <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" class="exportTypeFilter" value="permanent" checked>Permanent</label>
             <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" class="exportTypeFilter" value="ap" checked>Ponctuel (AP)</label>
@@ -147,9 +183,26 @@ function renderMembres() {
         </div>
         <div style="border:1px solid var(--line);border-radius:10px;padding:9px 12px;">
           <div style="font-size:12.5px;font-weight:700;margin-bottom:7px;">Programmes</div>
+          <div style="display:flex;gap:8px;margin-bottom:8px;">
+            <button type="button" class="btn btn-ghost btn-sm" data-export-check-group="exportProgFilter" data-export-check-action="all">Tout</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-export-check-group="exportProgFilter" data-export-check-action="none">Aucun</button>
+          </div>
           <div style="display:flex;flex-wrap:wrap;gap:12px;font-size:12px;">
             <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" class="exportProgFilter" value="tous" id="exportProgAll" checked>Tous les programmes</label>
             ${d.programmes.map(p => `<label style="display:flex;align-items:center;gap:5px;cursor:pointer;opacity:0.5;" class="exportProgOne"><input type="checkbox" class="exportProgFilter" value="${p.id}" disabled>${escapeHtml(p.nom)}</label>`).join('')}
+          </div>
+        </div>
+        <div style="border:1px solid var(--line);border-radius:10px;padding:9px 12px;">
+          <div style="font-size:12.5px;font-weight:700;margin-bottom:7px;">Statut d’activité</div>
+          <div style="display:flex;gap:8px;margin-bottom:8px;">
+            <button type="button" class="btn btn-ghost btn-sm" data-export-check-group="exportActivityFilter" data-export-check-action="all">Tout</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-export-check-group="exportActivityFilter" data-export-check-action="none">Aucun</button>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:12px;font-size:12px;">
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" class="exportActivityFilter" value="actif" checked>Actif</label>
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" class="exportActivityFilter" value="moyen" checked>Moyen</label>
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" class="exportActivityFilter" value="pasDuTout" checked>Pas du tout</label>
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" class="exportActivityFilter" value="nonRenseigne" checked>Non renseigné</label>
           </div>
         </div>
       </div>
@@ -165,6 +218,7 @@ function renderMembres() {
         <button class="btn btn-primary btn-sm" id="exportXlsxBtn">Exporter en Excel (.xlsx)</button>
         <button class="btn btn-ghost btn-sm" id="exportPdfBtn">Exporter en PDF</button>
       </div>
+      <div class="card-sub" style="margin-top:8px;">Le fichier Excel contient la liste filtrée et un onglet « Synthèse » des effectifs par catégorie et statut d’activité.</div>
     </div>`}
 
 
@@ -194,41 +248,84 @@ function attachMembresEvents() {
   // programme précis décoche "tous" pour permettre la sélection.
   const progAllCb = document.getElementById('exportProgAll');
   const progOneCbs = () => Array.from(document.querySelectorAll('.exportProgOne input.exportProgFilter'));
-  if (progAllCb) progAllCb.addEventListener('change', () => {
+  const setProgrammeFilters = (enabled, clearSelection = false) => {
     progOneCbs().forEach(cb => {
-      cb.disabled = progAllCb.checked;
-      cb.closest('.exportProgOne').style.opacity = progAllCb.checked ? '0.5' : '1';
-      if (progAllCb.checked) cb.checked = false;
+      cb.disabled = enabled;
+      cb.closest('.exportProgOne').style.opacity = enabled ? '0.5' : '1';
+      if (enabled || clearSelection) cb.checked = false;
     });
+  };
+  const refreshExportPreview = () => {
+    const preview = document.getElementById('exportPreviewCount');
+    if (preview) {
+      const count = getFilteredExportMembers().length;
+      preview.textContent = `${count} membre${count > 1 ? 's' : ''} correspondant${count > 1 ? 's' : ''}`;
+    }
+  };
+  if (progAllCb) progAllCb.addEventListener('change', () => {
+    setProgrammeFilters(progAllCb.checked);
+    refreshExportPreview();
   });
   progOneCbs().forEach(cb => cb.addEventListener('change', () => {
-    if (cb.checked && progAllCb) { progAllCb.checked = false; progOneCbs().forEach(c => { c.disabled = false; c.closest('.exportProgOne').style.opacity = '1'; }); }
+    if (cb.checked && progAllCb) { progAllCb.checked = false; setProgrammeFilters(false); }
+    refreshExportPreview();
   }));
 
-  // Construit les lignes filtrées + colonnes choisies, communes aux deux formats.
-  function buildExportRows() {
-    const checked = Array.from(document.querySelectorAll('.exportColCheckbox:checked')).map(cb => cb.value);
-    if (!checked.length) { showToast('Sélectionnez au moins une colonne'); return null; }
+  function getFilteredExportMembers() {
     const catChecked = Array.from(document.querySelectorAll('.exportCatFilter:checked')).map(cb => cb.value);
     const typeChecked = Array.from(document.querySelectorAll('.exportTypeFilter:checked')).map(cb => cb.value);
+    const activityChecked = Array.from(document.querySelectorAll('.exportActivityFilter:checked')).map(cb => cb.value);
     const progAll = document.getElementById('exportProgAll')?.checked;
     const progChecked = Array.from(document.querySelectorAll('.exportProgFilter:checked')).map(cb => cb.value).filter(v => v !== 'tous');
-    if (!typeChecked.length) { showToast('Sélectionnez au moins un type (Permanent ou AP)'); return null; }
-    if (!progAll && !progChecked.length) { showToast('Sélectionnez au moins un programme, ou « Tous les programmes »'); return null; }
-    const catFilterActive = catChecked.length < 6;
-    const filtered = d.membres.filter(m => {
-      if (catFilterActive && !catChecked.includes(m.categorie)) return false;
-      if (!typeChecked.includes(m.ap ? 'ap' : 'permanent')) return false;
-      if (!progAll && !progChecked.some(pid => memberInProgramme(m, pid))) return false;
+    const query = normalizeExportSearch(document.getElementById('exportSearch')?.value || '')
+      .split(/\s+/).filter(Boolean);
+    const programmeNames = member => member.ap || member.allProgrammes
+      ? 'Tous les programmes'
+      : (member.programmeIds || []).map(pid => (d.programmes.find(p => p.id === pid) || {}).nom).filter(Boolean).join(' ');
+    const filtered = d.membres.filter(member => {
+      const category = normaliseCategorie(member.categorie)
+        || String(member.categorie || '').trim()
+        || 'Non définie';
+      if (!catChecked.includes(category)) return false;
+      if (!typeChecked.includes(member.ap ? 'ap' : 'permanent')) return false;
+      if (!activityChecked.includes(memberActivityStatus(member))) return false;
+      if (!progAll && !progChecked.some(pid => memberInProgramme(member, pid))) return false;
+      const searchable = normalizeExportSearch([
+        member.prenom, member.nom, member.sexe, category,
+        member.ap ? 'Ponctuel AP' : 'Permanent', programmeNames(member),
+        ...Object.entries(member.extra || {}).flat(),
+      ].join(' '));
+      if (!query.every(term => searchable.includes(term))) return false;
       return true;
     });
-    if (!filtered.length) { showToast('Aucun membre ne correspond à ces filtres'); return null; }
+    const collator = new Intl.Collator('fr', { sensitivity: 'base', numeric: true });
+    const sortBy = document.getElementById('exportSort')?.value || 'nom';
+    const byName = (a, b) => collator.compare(`${a.nom || ''} ${a.prenom || ''}`, `${b.nom || ''} ${b.prenom || ''}`);
+    return filtered.sort((a, b) => {
+      if (sortBy === 'categorie') {
+        return collator.compare(
+          String(normaliseCategorie(a.categorie) || a.categorie || 'Non définie'),
+          String(normaliseCategorie(b.categorie) || b.categorie || 'Non définie')
+        ) || byName(a, b);
+      }
+      if (sortBy === 'activite') {
+        const order = { actif: 0, moyen: 1, pasDuTout: 2, nonRenseigne: 3 };
+        return order[memberActivityStatus(a)] - order[memberActivityStatus(b)] || byName(a, b);
+      }
+      return byName(a, b);
+    });
+  }
+
+  function buildExportRows(members) {
+    const checked = Array.from(document.querySelectorAll('.exportColCheckbox:checked')).map(cb => cb.value);
+    if (!checked.length) { showToast('Sélectionnez au moins une colonne'); return null; }
+    if (!members.length) { showToast('Aucun membre ne correspond à ces filtres'); return null; }
     // Si des membres AP font partie de l’export, leur contact est
     // systématiquement récupéré, même si la colonne n’a pas été cochée.
-    const hasAp = filtered.some(m => m.ap);
+    const hasAp = members.some(m => m.ap);
     const cols = checked.slice();
     if (hasAp && extraFieldKeys(d).includes('Contact') && !cols.includes('Contact')) cols.push('Contact');
-    const rows = filtered.map(m => {
+    const rows = members.map(m => {
       const row = {};
       cols.forEach(key => {
         if (key === '__prenom') row['Prénom'] = m.prenom;
@@ -236,7 +333,7 @@ function attachMembresEvents() {
         else if (key === '__sexe') row['Sexe'] = m.sexe === 'H' ? 'Homme' : 'Femme';
         else if (key === '__categorie') row['Catégorie'] = m.categorie || '';
         else if (key === '__type') row['Type'] = m.ap ? 'Ponctuel (AP)' : 'Permanent';
-        else if (key === '__programmes') row['Programmes'] = m.ap || m.allProgrammes ? 'Tous les programmes' : m.programmeIds.map(pid => (d.programmes.find(p => p.id === pid) || {}).nom).filter(Boolean).join(', ');
+        else if (key === '__programmes') row['Programmes'] = m.ap || m.allProgrammes ? 'Tous les programmes' : (m.programmeIds || []).map(pid => (d.programmes.find(p => p.id === pid) || {}).nom).filter(Boolean).join(', ');
         else row[key] = (m.extra && m.extra[key]) || '';
       });
       return row;
@@ -244,20 +341,43 @@ function attachMembresEvents() {
     return rows;
   }
 
+  document.querySelectorAll('[data-export-check-group]').forEach(button => button.addEventListener('click', () => {
+    const group = button.dataset.exportCheckGroup;
+    const selectAll = button.dataset.exportCheckAction === 'all';
+    if (group === 'exportProgFilter') {
+      if (progAllCb) progAllCb.checked = selectAll;
+      setProgrammeFilters(selectAll, !selectAll);
+    } else {
+      document.querySelectorAll(`.${group}`).forEach(checkbox => { checkbox.checked = selectAll; });
+    }
+    refreshExportPreview();
+  }));
+  ['exportSearch', 'exportSort'].forEach(id => {
+    const input = document.getElementById(id);
+    if (input) input.addEventListener('input', refreshExportPreview);
+    if (input && id === 'exportSort') input.addEventListener('change', refreshExportPreview);
+  });
+  document.querySelectorAll('.exportCatFilter, .exportTypeFilter, .exportActivityFilter, .exportColCheckbox')
+    .forEach(checkbox => checkbox.addEventListener('change', refreshExportPreview));
+  refreshExportPreview();
+
   const exportXlsxBtn = document.getElementById('exportXlsxBtn');
   if (exportXlsxBtn) exportXlsxBtn.addEventListener('click', () => {
-    const rows = buildExportRows();
+    const members = getFilteredExportMembers();
+    const rows = buildExportRows(members);
     if (!rows) return;
     const ws = buildStyledSheet(rows);
+    const summary = buildActivitySummarySheet(members);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Membres');
+    XLSX.utils.book_append_sheet(wb, summary, 'Synthèse');
     XLSX.writeFile(wb, `carnet-sgm-export-membres-${new Date().toISOString().slice(0, 10)}.xlsx`);
     showToast('Export Excel généré');
   });
 
   const exportPdfBtn = document.getElementById('exportPdfBtn');
   if (exportPdfBtn) exportPdfBtn.addEventListener('click', () => {
-    const rows = buildExportRows();
+    const rows = buildExportRows(getFilteredExportMembers());
     if (!rows) return;
     buildExportPdf(rows);
     showToast('Export PDF généré');

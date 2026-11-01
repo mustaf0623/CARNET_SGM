@@ -31,6 +31,39 @@ function buildStyledSheet(rows) {
   return ws;
 }
 
+function buildActivitySummarySheet(members) {
+  const summaries = new Map();
+  const totals = { actif: 0, moyen: 0, pasDuTout: 0, nonRenseigne: 0, total: 0 };
+  members.forEach(member => {
+    const category = normaliseCategorie(member.categorie)
+      || String(member.categorie || '').trim()
+      || 'Non définie';
+    const row = summaries.get(category) || {
+      Catégorie: category, Actif: 0, Moyen: 0, 'Pas du tout': 0, 'Non renseigné': 0, Total: 0,
+    };
+    const status = memberActivityStatus(member);
+    const statusColumn = {
+      actif: 'Actif', moyen: 'Moyen', pasDuTout: 'Pas du tout', nonRenseigne: 'Non renseigné',
+    }[status];
+    row[statusColumn]++;
+    row.Total++;
+    totals[status]++;
+    totals.total++;
+    summaries.set(category, row);
+  });
+  const rows = Array.from(summaries.values())
+    .sort((a, b) => a.Catégorie.localeCompare(b.Catégorie, 'fr'));
+  rows.push({
+    Catégorie: 'Total',
+    Actif: totals.actif,
+    Moyen: totals.moyen,
+    'Pas du tout': totals.pasDuTout,
+    'Non renseigné': totals.nonRenseigne,
+    Total: totals.total,
+  });
+  return buildStyledSheet(rows);
+}
+
 // Génère un PDF tabulaire (colonnes proportionnelles au contenu, pagination
 // automatique, en-tête répété sur chaque page) pour l'export de membres.
 function buildExportPdf(rows) {

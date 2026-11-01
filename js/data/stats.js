@@ -36,6 +36,20 @@ function extraFieldKeys(data) {
   data.membres.forEach(m => Object.keys(m.extra || {}).forEach(k => keys.add(k)));
   return Array.from(keys);
 }
+function memberActivityStatus(member) {
+  const extra = member && member.extra || {};
+  const activityFields = Object.entries(extra).filter(([key]) =>
+    key.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').includes('activite')
+  );
+  for (const [, value] of activityFields) {
+    const normalizedValue = String(value || '').toLowerCase().normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+    if (normalizedValue === 'actif' || normalizedValue === 'active') return 'actif';
+    if (normalizedValue === 'moyen' || normalizedValue === 'moyenne') return 'moyen';
+    if (normalizedValue === 'pas du tout' || normalizedValue.startsWith('pas du tout ')) return 'pasDuTout';
+  }
+  return 'nonRenseigne';
+}
 function getMemberContactInfo(membre) {
   if (!membre) return '';
   // Le contact n'est jamais une propriété directe du membre — il vient soit
