@@ -19,7 +19,24 @@ function renderPointage() {
   if (state.pointageSessionId !== 'new') {
     d.pointages.filter(p => p.sessionId === state.pointageSessionId).forEach(p => currentPointages[p.membreId] = p.statut);
   }
-  let membres = d.membres.filter(m => memberInProgramme(m, state.pointageProgId));
+  const programmeSessionIds = new Set(d.sessions
+    .filter(session => session.programmeId === state.pointageProgId && session.id !== state.pointageSessionId)
+    .map(session => session.id));
+  const presencesParMembre = new Map();
+  d.pointages.forEach(pointage => {
+    if (programmeSessionIds.has(pointage.sessionId) && pointage.statut === 'present') {
+      presencesParMembre.set(pointage.membreId, (presencesParMembre.get(pointage.membreId) || 0) + 1);
+    }
+  });
+  const membres = d.membres
+    .filter(m => memberInProgramme(m, state.pointageProgId))
+    .sort((a, b) => {
+      const priorityDifference = Number(isPriorityProgram(prog, b.categorie)) - Number(isPriorityProgram(prog, a.categorie));
+      if (priorityDifference) return priorityDifference;
+      const attendanceDifference = (presencesParMembre.get(b.id) || 0) - (presencesParMembre.get(a.id) || 0);
+      if (attendanceDifference) return attendanceDifference;
+      return `${a.nom} ${a.prenom}`.localeCompare(`${b.nom} ${b.prenom}`, 'fr', { sensitivity: 'base' });
+    });
   
   return `
     <div class="page-head">
@@ -47,7 +64,13 @@ function renderPointage() {
       ` : ''}
     </div>
     <div class="card">
-      <h3 class="card-title">${escapeHtml(prog.nom)}</h3>
+      <div class="pointage-list-header">
+        <h3 class="card-title">${escapeHtml(prog.nom)}</h3>
+        <label class="pointage-search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.8"/><path d="m16 16 5 5"/></svg>
+          <input type="text" id="memberSearch" placeholder="Rechercher un membre ou une catégorie" aria-label="Rechercher un membre ou une catégorie">
+        </label>
+      </div>
       ${selectedSession ? `<div class="card-sub" id="sessionSummary" style="margin-bottom:12px;">
         Lieu : ${escapeHtml(sessionLieu(selectedSession) || 'Non renseigné')}
         ${sessionHours(selectedSession) ? ' · Horaires : ' + escapeHtml(sessionHours(selectedSession)) : ''}
@@ -74,6 +97,7 @@ function renderPointage() {
       </div>
       <div id="memberList">
         ${membres.length ? membres.map(m => memberRow(m, currentPointages[m.id], state.pointageFastMode, !canMarkAttendance)).join('') : emptyRow('Aucun membre inscrit à ce programme.')}
+        ${membres.length ? '<div id="memberSearchEmpty" class="pointage-search-empty" hidden>Aucun membre ou catégorie ne correspond à cette recherche.</div>' : ''}
       </div>
       ${membres.length ? `<div style="margin-top:20px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">
         ${selectedSession ? `<button class="btn btn-ghost" id="deleteSessionBtn" style="color:var(--terracotta);border-color:var(--terracotta-tint);">Supprimer cette séance</button>` : '<span></span>'}
@@ -103,11 +127,14 @@ function memberRow(m, statut, fastMode, disabled) {
       <button class="status-btn present ${statut === 'present' ? 'active' : ''}" data-statut="present" ${disabled ? 'disabled' : ''}>Présent</button>
       <button class="status-btn absent ${statut === 'absent' ? 'active' : ''}" data-statut="absent" ${disabled ? 'disabled' : ''}>Absent</button>
     </div>`;
-  return `<div class="member-row" data-membre="${m.id}">
+  const sex = m.sexe === 'H' ? 'Homme' : 'Femme';
+  const category = m.categorie && normaliseCategorie(m.categorie) !== normaliseCategorie(sex) ? m.categorie : '';
+  const searchText = [m.prenom, m.nom, m.categorie, sex, m.ap ? 'AP ponctuel' : ''].filter(Boolean).join(' ');
+  return `<div class="member-row" data-membre="${m.id}" data-search="${escapeHtml(searchText)}">
     <div class="member-avatar">${initials(m.nom, m.prenom)}</div>
     <div class="member-info">
       <button type="button" class="member-name-link" data-id="${m.id}" style="background:none;border:none;padding:0;font-size:13.5px;font-weight:700;color:var(--ink);cursor:pointer;text-decoration:underline;text-decoration-color:var(--line-strong);text-align:left;">${escapeHtml(m.prenom)} ${escapeHtml(m.nom)}</button>${m.ap ? ` <span class="pill" style="background:var(--gold-tint);border-color:var(--gold);color:var(--gold);font-size:10px;">AP</span>` : ''}
-      <div class="member-meta">${m.sexe === 'H' ? 'Homme' : 'Femme'}</div>
+      <div class="member-meta">${sex}${category ? ' · ' + escapeHtml(category) : ''}</div>
     </div>
     ${statusHtml}
   </div>`;
@@ -124,6 +151,9 @@ function attendanceFingerprint(programmeId, date, lieu, presentMemberIds) {
 function sessionAttendanceLieu(session) {
   return session.lieu || session.label || '';
 }
+function normalisePointageSearch(value) {
+  return String(value || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
 function attachPointageEvents() {
   const d = state.data;
   const progSel = document.getElementById('progSelect');
@@ -132,6 +162,19 @@ function attachPointageEvents() {
   if (sessSel) sessSel.addEventListener('change', e => { state.pointageSessionId = e.target.value; if (e.target.value === 'new') state.pointageLieu = ''; render(); });
   const fastToggle = document.getElementById('fastModeToggle');
   if (fastToggle) fastToggle.addEventListener('change', e => { state.pointageFastMode = e.target.checked; render(); });
+  const memberSearch = document.getElementById('memberSearch');
+  if (memberSearch) memberSearch.addEventListener('input', () => {
+    const query = normalisePointageSearch(memberSearch.value);
+    const rows = document.querySelectorAll('#memberList .member-row');
+    let visibleCount = 0;
+    rows.forEach(row => {
+      const matches = normalisePointageSearch(row.dataset.search).includes(query);
+      row.hidden = !matches;
+      if (matches) visibleCount++;
+    });
+    const emptyMessage = document.getElementById('memberSearchEmpty');
+    if (emptyMessage) emptyMessage.hidden = visibleCount > 0;
+  });
   const dateInput = document.getElementById('sessionDate');
   if (dateInput) dateInput.addEventListener('change', e => state.pointageDate = e.target.value);
   const lieuInput = document.getElementById('sessionLieu');
