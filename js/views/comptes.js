@@ -52,7 +52,6 @@ function renderComptes() {
       </div>
       <button class="btn btn-ghost" id="refreshAccountsBtn">Actualiser</button>
     </div>
-    <div class="account-bootstrap-note">Le premier gestionnaire des comptes doit être désigné une fois dans Supabase. Consultez le fichier <code>supabase-roles-setup.sql</code>.</div>
     ${emptyMessage}
     <div class="account-list">${accountRows}</div>
   `;

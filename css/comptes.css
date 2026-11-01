@@ -11,6 +11,4 @@
 .account-scope legend{ padding:0 6px; font-size:12px; font-weight:700; color:var(--ink-dim); }
 .account-program-list{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:8px; margin-top:12px; }
 .account-program-option{ display:flex; align-items:center; gap:7px; color:var(--ink-dim); font-size:12px; }
-.account-bootstrap-note{ margin-bottom:14px; padding:12px 14px; border:1px solid var(--gold-tint); border-radius:var(--radius-sm); background:var(--gold-tint); color:var(--ink-dim); font-size:12px; line-height:1.55; }
-.account-bootstrap-note code{ font-family:'IBM Plex Mono',monospace; }
 .account-row .account-save{ justify-self:start; }
