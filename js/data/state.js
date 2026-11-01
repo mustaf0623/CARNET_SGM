@@ -43,6 +43,8 @@ let state = {
   reportSessionId: 'toutes',
   supervisionProgFilter: 'global',
   supervisionYearFilter: 'toutes',
+  supervisionLieuA: '',
+  supervisionLieuB: '',
 };
 
 function isPresidentReadOnly() {

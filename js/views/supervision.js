@@ -89,6 +89,43 @@ function supervisionSignal(sessions, data) {
   return { previous, recent, difference: recent.rate - previous.rate };
 }
 
+function supervisionCompareVenues(data, sessions, venueA, venueB) {
+  const venueStats = new Map([
+    [venueA, { sessions: 0, pointages: new Map() }],
+    [venueB, { sessions: 0, pointages: new Map() }],
+  ]);
+  sessions.forEach(session => {
+    const venue = sessionLieu(session).trim();
+    const stats = venueStats.get(venue);
+    if (!stats) return;
+    stats.sessions++;
+    supervisionPointages(data, session).forEach(pointage => {
+      if (pointage.statut !== 'present' && pointage.statut !== 'absent') return;
+      const memberStats = stats.pointages.get(pointage.membreId) || { present: 0, total: 0 };
+      memberStats.total++;
+      if (pointage.statut === 'present') memberStats.present++;
+      stats.pointages.set(pointage.membreId, memberStats);
+    });
+  });
+
+  const a = venueStats.get(venueA);
+  const b = venueStats.get(venueB);
+  const pairedMembers = Array.from(a.pointages.entries()).filter(([memberId]) => b.pointages.has(memberId));
+  if (!pairedMembers.length) {
+    return { venueA: a, venueB: b, matchedMembers: 0, rateA: null, rateB: null, difference: null };
+  }
+  const rateA = pairedMembers.reduce((sum, [memberId, stats]) => sum + stats.present / stats.total, 0) / pairedMembers.length;
+  const rateB = pairedMembers.reduce((sum, [memberId]) => {
+    const stats = b.pointages.get(memberId);
+    return sum + stats.present / stats.total;
+  }, 0) / pairedMembers.length;
+  return {
+    venueA: a, venueB: b, matchedMembers: pairedMembers.length,
+    rateA: Math.round(rateA * 100), rateB: Math.round(rateB * 100),
+    difference: Math.round((rateB - rateA) * 100),
+  };
+}
+
 function renderSupervision() {
   const d = state.data;
   const allowedProgrammes = d.programmes.filter(programme => accountCanReadProgramme(programme.id));
@@ -103,6 +140,15 @@ function renderSupervision() {
   const sessions = supervisionSessions(d, programmeId, year);
   const overall = supervisionRate(sessions.map(session => sessionStats(d, session.id)));
   const breakdowns = supervisionBreakdowns(d, sessions);
+  const venues = Array.from(new Set(sessions.map(session => sessionLieu(session).trim()).filter(Boolean)))
+    .sort((a, b) => a.localeCompare(b, 'fr'));
+  if (!venues.includes(state.supervisionLieuA)) state.supervisionLieuA = venues[0] || '';
+  if (!venues.includes(state.supervisionLieuB) || state.supervisionLieuB === state.supervisionLieuA) {
+    state.supervisionLieuB = venues.find(venue => venue !== state.supervisionLieuA) || '';
+  }
+  const venueComparison = programmeId !== 'global' && state.supervisionLieuA && state.supervisionLieuB
+    ? supervisionCompareVenues(d, sessions, state.supervisionLieuA, state.supervisionLieuB)
+    : null;
   const trend = supervisionTrend(sessions, d);
   const signal = supervisionSignal(sessions, d);
   const latestTrend = trend.slice(-12);
@@ -140,6 +186,33 @@ function renderSupervision() {
       : signal.difference < -5
         ? `Baisse du taux de présence de ${Math.abs(signal.difference)} points sur les trois dernières séances (${signal.recent.rate}% contre ${signal.previous.rate}%).`
         : `Taux globalement stable sur les trois dernières séances (${signal.recent.rate}% contre ${signal.previous.rate}%).`;
+  const venueOptions = selectedVenue => venues.map(venue =>
+    `<option value="${escapeHtml(venue)}" ${venue === selectedVenue ? 'selected' : ''}>${escapeHtml(venue)}</option>`
+  ).join('');
+  const venueComparisonContent = programmeId === 'global'
+    ? '<p class="supervision-signal">Choisissez un programme précis dans les filtres pour comparer ses lieux de séance.</p>'
+    : venues.length < 2
+      ? '<p class="supervision-signal">Au moins deux lieux renseignés sont nécessaires pour effectuer cette comparaison.</p>'
+      : !venueComparison || venueComparison.matchedMembers === 0
+        ? '<p class="supervision-signal">Aucun membre n’a de pointages exploitables dans les deux lieux sélectionnés pour cette période.</p>'
+        : `<div class="supervision-venue-results">
+            <div class="grid grid-2">
+              <div class="supervision-venue-result">
+                <strong>${escapeHtml(state.supervisionLieuA)}</strong>
+                <span>${venueComparison.rateA}% de présence moyenne</span>
+                <small>${venueComparison.venueA.sessions} séance(s) · ${Array.from(venueComparison.venueA.pointages.values()).reduce((sum, row) => sum + row.total, 0)} pointage(s)</small>
+              </div>
+              <div class="supervision-venue-result">
+                <strong>${escapeHtml(state.supervisionLieuB)}</strong>
+                <span>${venueComparison.rateB}% de présence moyenne</span>
+                <small>${venueComparison.venueB.sessions} séance(s) · ${Array.from(venueComparison.venueB.pointages.values()).reduce((sum, row) => sum + row.total, 0)} pointage(s)</small>
+              </div>
+            </div>
+            <p class="supervision-signal ${venueComparison.difference > 0 ? 'is-up' : venueComparison.difference < 0 ? 'is-down' : ''}">
+              Écart descriptif : ${venueComparison.difference > 0 ? '+' : ''}${venueComparison.difference} point(s) de pourcentage au ${escapeHtml(state.supervisionLieuB)} par rapport au ${escapeHtml(state.supervisionLieuA)}, calculé sur ${venueComparison.matchedMembers} membre(s) pointé(s) dans les deux lieux.
+            </p>
+            <p class="supervision-caution">Cette comparaison suit les mêmes membres pour limiter l’effet de composition, mais ne tient pas compte des dates, du contenu des séances ni d’autres facteurs. Elle ne permet pas, à elle seule, de conclure que le lieu a causé l’écart.</p>
+          </div>`;
 
   return `
     <div class="page-head">
@@ -196,6 +269,17 @@ function renderSupervision() {
           <tbody>${programmePlaceRows || '<tr><td colspan="4">Aucune combinaison programme/lieu disponible.</td></tr>'}</tbody>
         </table></div>
       </div>
+      <div class="card" style="grid-column:1/-1;">
+        <h3 class="card-title">Comparaison exploratoire des lieux</h3>
+        <div class="card-sub">Comparaison des taux individuels moyens pour les mêmes membres, dans un seul programme et la période sélectionnée.</div>
+        ${programmeId !== 'global' && venues.length >= 2 ? `
+          <div class="supervision-venue-filters">
+            <div class="field"><label>Lieu de référence</label><select id="supervisionLieuA">${venueOptions(state.supervisionLieuA)}</select></div>
+            <div class="field"><label>Lieu comparé</label><select id="supervisionLieuB">${venueOptions(state.supervisionLieuB)}</select></div>
+          </div>
+        ` : ''}
+        ${venueComparisonContent}
+      </div>
     </div>`;
 }
 
@@ -214,6 +298,21 @@ function attachSupervisionEvents() {
   const yearSelect = document.getElementById('supervisionYear');
   if (yearSelect) yearSelect.addEventListener('change', event => {
     state.supervisionYearFilter = event.target.value;
+    render();
+  });
+  const venueASelect = document.getElementById('supervisionLieuA');
+  if (venueASelect) venueASelect.addEventListener('change', event => {
+    state.supervisionLieuA = event.target.value;
+    if (state.supervisionLieuB === state.supervisionLieuA) {
+      const venueBSelect = document.getElementById('supervisionLieuB');
+      state.supervisionLieuB = Array.from(venueBSelect.options).map(option => option.value)
+        .find(venue => venue !== state.supervisionLieuA) || '';
+    }
+    render();
+  });
+  const venueBSelect = document.getElementById('supervisionLieuB');
+  if (venueBSelect) venueBSelect.addEventListener('change', event => {
+    state.supervisionLieuB = event.target.value;
     render();
   });
 }
