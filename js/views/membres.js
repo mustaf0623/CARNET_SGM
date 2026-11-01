@@ -61,6 +61,9 @@ function renderMembres() {
   const readOnly = isPresidentReadOnly();
   const allowedProgrammes = d.programmes.filter(programme => accountCanReadProgramme(programme.id));
   const directoryMembers = membersInMembreScope(d.membres, readOnly, state.account, allowedProgrammes);
+  const exportCategories = Array.from(new Set(d.membres.map(member =>
+    normaliseCategorie(member.categorie) || String(member.categorie || '').trim() || 'Non définie'
+  ))).sort((a, b) => a.localeCompare(b, 'fr'));
   const directoryCategories = Array.from(new Set(directoryMembers.map(member =>
     normaliseCategorie(member.categorie) || String(member.categorie || '').trim() || 'Non définie'
   ))).sort((a, b) => a.localeCompare(b, 'fr'));
