@@ -70,7 +70,7 @@ function renderMembres() {
           <label>Informations complémentaires (base importée)</label>
           ${(() => {
             const keys = extraFieldKeys(d);
-            if (!keys.length) return `<div style="font-size:11.5px;color:var(--ink-faint);">Aucun champ détecté pour l’instant — importez d’abord un fichier pour que ces champs apparaissent ici.</div>`;
+            if (!keys.length) return `<div style="font-size:11.5px;color:var(--ink-faint);">Aucun champ détecté pour l’instant importez d’abord un fichier pour que ces champs apparaissent ici.</div>`;
             return `<div class="extra-info-grid" style="max-height:min(260px, 40vh);">${keys.map(k => `<div class="extra-info-item"><label>${escapeHtml(k)}</label><div class="extra-info-row"><input type="text" class="newMembreExtraInput" data-key="${escapeHtml(k)}"></div></div>`).join('')}</div>`;
           })()}
         </div>
@@ -300,7 +300,7 @@ function attachMembresEvents() {
       ? { id: uid(), nom, prenom, sexe, categorie, programmeIds: [], allProgrammes: true, ap: true, extra }
       : { id: uid(), nom, prenom, sexe, categorie, programmeIds: [], allProgrammes: true, ap: false, extra };
     d.membres.push(membre);
-    await saveData(); showToast(ap ? 'Membre ponctuel ajouté (AP)' : 'Membre ajouté — pointable dans tous les programmes'); render();
+    await saveData(); showToast(ap ? 'Membre ponctuel ajouté (AP)' : 'Membre ajouté et pointable dans tous les programmes'); render();
   });
 
   const dz = document.getElementById('dropZone');
