@@ -11,6 +11,50 @@ const SYNC_STATE_KEY = 'carnet-sync-state';
 const SYNC_STATE_BACKUP_KEY = 'carnet-sync-state-backup';
 let syncState = { pending: false, snapshots: null };
 
+function accountFromProfile(profile, user) {
+  if (!profile) return null;
+  return {
+    id: user.id,
+    email: profile.email || user.email || '',
+    name: profile.name || '',
+    role: profile.role || null,
+    accountAdmin: !!profile.account_admin,
+    scopeGlobal: !!profile.scope_global,
+    scopeProgrammeIds: Array.isArray(profile.scope_program_ids) ? profile.scope_program_ids : [],
+  };
+}
+function cacheAccountAccess(account) {
+  if (!account || !account.role) return;
+  try { localStorage.setItem('carnet-account-access-' + account.id, JSON.stringify(account)); }
+  catch (e) { console.error('Carnet SGM — impossible de mémoriser le rôle pour le mode hors ligne:', e); }
+}
+function cachedAccountAccess(userId) {
+  try {
+    const saved = localStorage.getItem('carnet-account-access-' + userId);
+    return saved ? JSON.parse(saved) : null;
+  } catch (e) {
+    console.error('Carnet SGM — impossible de lire le rôle mémorisé:', e);
+    return null;
+  }
+}
+function clearCachedAccountAccess(userId) {
+  try { localStorage.removeItem('carnet-account-access-' + userId); }
+  catch (e) { console.error('Carnet SGM — impossible d’effacer le rôle mémorisé:', e); }
+}
+async function fetchCurrentAccount() {
+  if (!sb || !sbUser) return null;
+  const { data, error } = await sb.from('profiles')
+    .select('id,email,name,role,account_admin,scope_global,scope_program_ids')
+    .eq('id', sbUser.id)
+    .maybeSingle();
+  if (error) throw error;
+  const account = accountFromProfile(data, sbUser);
+  state.account = account;
+  if (account && account.role) cacheAccountAccess(account);
+  else clearCachedAccountAccess(sbUser.id);
+  return account;
+}
+
 // Attend au plus `ms` millisecondes une promesse ; passé ce délai, se résout
 // avec `fallback` plutôt que de rester bloquée. Utile pour les appels réseau
 // (Supabase) qui, en Wi-Fi connecté mais sans Internet réel, peuvent mettre
@@ -78,7 +122,9 @@ async function pullFromSupabase() {
     sb.from('bureau_pointages').select('*'),
     sb.from('bureau_presence_extras').select('*'),
   ]);
-  if (progRes.error) throw progRes.error;
+  const queryError = [progRes, memRes, sessRes, ptRes, profRes, bMandatRes, bPosteRes, bMembreRes, bReunionRes, bPointageRes, bExtraRes]
+    .find(result => result.error);
+  if (queryError) throw queryError.error;
   const programmes = (progRes.data || []).map(r => ({ id: r.id, nom: r.nom, prioriteCategories: r.priorite_categories || [] }));
   const membres = (memRes.data || []).map(r => ({ id: r.id, nom: r.nom, prenom: r.prenom, sexe: r.sexe, categorie: r.categorie || '', programmeIds: r.programme_ids || [], allProgrammes: !!r.all_programmes, ap: !!r.ap, extra: r.extra || {} }));
   const sessions = (sessRes.data || []).map(r => ({
@@ -88,13 +134,15 @@ async function pullFromSupabase() {
   }));
   const pointages = (ptRes.data || []).map(r => ({ id: r.id, sessionId: r.session_id, membreId: r.membre_id, statut: r.statut }));
   const name = (profRes.data && profRes.data.name) || '';
+  const account = accountFromProfile(profRes.data, sbUser);
+  if (account && account.role) cacheAccountAccess(account);
   const bureauMandats = (bMandatRes.data || []).map(r => ({ id: r.id, nom: r.nom, dateDebut: r.date_debut || '', dateFin: r.date_fin || '', actif: !!r.actif }));
   const bureauPostes = (bPosteRes.data || []).map(r => ({ id: r.id, nom: r.nom }));
   const bureauMembres = (bMembreRes.data || []).map(r => ({ id: r.id, mandatId: r.mandat_id, membreId: r.membre_id, posteId: r.poste_id }));
   const bureauReunions = (bReunionRes.data || []).map(r => ({ id: r.id, mandatId: r.mandat_id, numero: r.numero, date: r.date, ordreDuJour: r.ordre_du_jour || '', pvTexte: r.pv_texte || '', pvLien: r.pv_lien || '' }));
   const bureauPointages = (bPointageRes.data || []).map(r => ({ id: r.id, reunionId: r.reunion_id, membreId: r.membre_id, statut: r.statut }));
   const bureauPresenceExtras = (bExtraRes.data || []).map(r => ({ id: r.id, reunionId: r.reunion_id, name: r.name, poste: r.poste || '', statut: r.statut || 'present' }));
-  return { profile: { name }, programmes, membres, sessions, pointages, bureauMandats, bureauPostes, bureauMembres, bureauReunions, bureauPointages, bureauPresenceExtras };
+  return { profile: { name }, account, programmes, membres, sessions, pointages, bureauMandats, bureauPostes, bureauMembres, bureauReunions, bureauPointages, bureauPresenceExtras };
 }
 
 async function syncTable(tableName, rows, toRemote, prevMap) {
@@ -164,6 +212,7 @@ async function rejectDuplicateAttendance() {
 
 async function pushToSupabase() {
   if (!sb || !sbUser) return false;
+  if (!state.account || state.account.role !== 'ca') return false;
   if (syncing) { syncQueued = true; return false; }
   syncing = true;
   try {
@@ -182,7 +231,8 @@ async function pushToSupabase() {
     snapshotMaps.bureauReunions = await syncTable('bureau_reunions', state.data.bureauReunions, r => ({ id: r.id, mandat_id: r.mandatId, numero: r.numero, date: r.date, ordre_du_jour: r.ordreDuJour || '', pv_texte: r.pvTexte || '', pv_lien: r.pvLien || '' }), snapshotMaps.bureauReunions);
     snapshotMaps.bureauPointages = await syncTable('bureau_pointages', state.data.bureauPointages, p => ({ id: p.id, reunion_id: p.reunionId, membre_id: p.membreId, statut: p.statut }), snapshotMaps.bureauPointages);
     snapshotMaps.bureauPresenceExtras = await syncTable('bureau_presence_extras', state.data.bureauPresenceExtras || [], x => ({ id: x.id, reunion_id: x.reunionId, name: x.name, poste: x.poste || '', statut: x.statut || 'present' }), snapshotMaps.bureauPresenceExtras);
-    try { await sb.from('profiles').upsert({ id: sbUser.id, name: state.data.profile.name }); } catch (e) { /* non bloquant */ }
+    const { error: profileError } = await sb.from('profiles').upsert({ id: sbUser.id, name: state.data.profile.name });
+    if (profileError) throw profileError;
     await saveSyncState(false);
     return true;
   } catch (e) {
@@ -214,6 +264,8 @@ function handleRemoteChange() {
       // pourrait écraser une saisie locale pas encore synchronisée.
       await pushToSupabase();
       const remote = await pullFromSupabase();
+      state.account = remote.account;
+      state.data.profile = remote.profile;
       state.data.programmes = remote.programmes;
       state.data.membres = remote.membres;
       state.data.sessions = remote.sessions;
@@ -228,7 +280,9 @@ function handleRemoteChange() {
       await idbSet('carnet-data', state.data);
       showToast('Données mises à jour depuis un autre appareil');
       render();
-    } catch (e) { /* on retentera au prochain changement */ }
+    } catch (e) {
+      console.error('Carnet SGM — impossible de recharger les droits et les données distantes:', e);
+    }
   }, 900);
 }
 let realtimeChannel = null;
@@ -238,6 +292,7 @@ function subscribeRealtime()
   if (realtimeChannel) return;
   realtimeChannel= sb
   .channel('carnet-sync')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles', filter: 'id=eq.' + sbUser.id }, handleRemoteChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'programmes' }, handleRemoteChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'membres' }, handleRemoteChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'sessions' }, handleRemoteChange)

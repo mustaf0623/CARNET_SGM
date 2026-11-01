@@ -10,7 +10,9 @@ function buildReportDoc(scope, yearFilter, sessionId) {
   const pageW = doc.internal.pageSize.getWidth();
   const margin = 15;
   const contentW = pageW - margin * 2;
-  const scopeLabel = scope === 'global' ? 'Tous les programmes' : ((d.programmes.find(p => p.id === scope) || {}).nom || '');
+  const scopeLabel = scope === 'global'
+    ? isPresidentReadOnly() && !state.account.scopeGlobal ? 'Tous les programmes autorisés' : 'Tous les programmes'
+    : ((d.programmes.find(p => p.id === scope) || {}).nom || '');
 
   // ---------- Bandeau d'en-tête ----------
   doc.setFillColor(...emeraldDk);
@@ -120,7 +122,8 @@ function buildReportDoc(scope, yearFilter, sessionId) {
       doc.setDrawColor(...track);
       doc.line(margin, pageH - 22, pageW - margin, pageH - 22);
       doc.setFont('helvetica', 'italic'); doc.setFontSize(9.5); doc.setTextColor(...ink);
-      doc.text('Signé par ' + d.profile.name + ' — Commission Administrative', margin, pageH - 15);
+      const signatoryBody = isPresidentReadOnly() ? 'Collège des présidents' : 'Commission Administrative';
+      doc.text('Signé par ' + d.profile.name + ' — ' + signatoryBody, margin, pageH - 15);
       doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...faint);
       doc.text('Généré automatiquement par Carnet SGM le ' + fmtDate(todayISO()) + ' à ' + nowTime(), margin, pageH - 10.5);
       doc.text('Page ' + i + ' / ' + totalPagesSess, pageW - margin, pageH - 10.5, { align: 'right' });
@@ -218,7 +221,8 @@ function buildReportDoc(scope, yearFilter, sessionId) {
     doc.setDrawColor(...track);
     doc.line(margin, pageH - 22, pageW - margin, pageH - 22);
     doc.setFont('helvetica', 'italic'); doc.setFontSize(9.5); doc.setTextColor(...ink);
-    doc.text('Signé par ' + d.profile.name + ' — Commission Administrative', margin, pageH - 15);
+    const signatoryBody = isPresidentReadOnly() ? 'Collège des présidents' : 'Commission Administrative';
+    doc.text('Signé par ' + d.profile.name + ' — ' + signatoryBody, margin, pageH - 15);
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(...faint);
     doc.text('Généré automatiquement par Carnet SGM le ' + fmtDate(todayISO()) + ' à ' + nowTime(), margin, pageH - 10.5);
     doc.text('Page ' + i + ' / ' + totalPages, pageW - margin, pageH - 10.5, { align: 'right' });
@@ -229,6 +233,17 @@ function buildReportDoc(scope, yearFilter, sessionId) {
 }
 
 function downloadPdf(scope, yearFilter, sessionId) {
+  if (!accountCanReadReportScope(scope)) {
+    showToast('Cette portée ne fait pas partie des accès attribués à votre compte');
+    return;
+  }
+  if (sessionId && sessionId !== 'toutes') {
+    const session = state.data.sessions.find(item => item.id === sessionId);
+    if (!session || (scope !== 'global' && session.programmeId !== scope) || !accountCanReadProgramme(session.programmeId)) {
+      showToast('Cette séance ne fait pas partie de la portée autorisée');
+      return;
+    }
+  }
   const { doc, filename } = buildReportDoc(scope, yearFilter, sessionId);
   doc.save(filename);
   showToast('Rapport PDF téléchargé');

@@ -20,8 +20,18 @@ async function reconcileSync(manual) {
   const btn = document.getElementById('syncBtn');
   if (btn) { btn.classList.add('spinning'); btn.disabled = true; }
   try {
-    await pushToSupabase();
+    const account = await fetchCurrentAccount();
+    if (!account || !account.role) {
+      state.data = emptyData();
+      renderAccountAccessScreen(
+        'Compte en attente d’activation',
+        'Un administrateur CA doit attribuer un rôle à ce compte avant l’accès aux données.'
+      );
+      return;
+    }
+    if (account.role === 'ca') await pushToSupabase();
     const remote = await pullFromSupabase();
+    state.account = remote.account;
     state.data.programmes = remote.programmes;
     state.data.membres = remote.membres;
     state.data.sessions = remote.sessions;
@@ -32,7 +42,7 @@ async function reconcileSync(manual) {
     state.data.bureauReunions = remote.bureauReunions;
     state.data.bureauPointages = remote.bureauPointages;
     state.data.bureauPresenceExtras = remote.bureauPresenceExtras;
-    if (!state.data.profile.name && remote.profile.name) state.data.profile.name = remote.profile.name;
+    state.data.profile = remote.profile;
     updateSnapshotsFromCurrent();
     await idbSet('carnet-data', state.data);
     subscribeRealtime();

@@ -4,27 +4,43 @@
 function renderRapports() {
   const d = state.data;
   const threshold = state.absenceThreshold || 3;
-  const watchlistProgId = state.watchlistProgramme || 'tous';
+  const requestedWatchlistProgramme = state.watchlistProgramme || 'tous';
+  const watchlistProgId = requestedWatchlistProgramme === 'tous' || d.programmes.some(programme => programme.id === requestedWatchlistProgramme)
+    && accountCanReadProgramme(requestedWatchlistProgramme)
+    ? requestedWatchlistProgramme
+    : 'tous';
+  state.watchlistProgramme = watchlistProgId;
   let watchlist = absenceWatchlist(d, threshold);
   if (watchlistProgId !== 'tous') watchlist = watchlist.filter(r => r.programme.id === watchlistProgId);
-  const scope = state.reportScope || 'global';
-  const sessionId = state.reportSessionId || 'toutes';
-  const scopeOptions = [`<option value="global">Tous les programmes</option>`].concat(
-    d.programmes.map(p => `<option value="${p.id}" ${scope === p.id ? 'selected' : ''}>${escapeHtml(p.nom)}</option>`)
+  const allowedProgrammes = d.programmes.filter(programme => accountCanReadProgramme(programme.id));
+  const globalAllowed = !isPresidentReadOnly() || !!state.account.scopeGlobal || !!state.account.scopeProgrammeIds.length;
+  const defaultScope = globalAllowed ? 'global' : (allowedProgrammes[0] ? allowedProgrammes[0].id : 'global');
+  const requestedScope = state.reportScope || defaultScope;
+  const scope = accountCanReadReportScope(requestedScope) ? requestedScope : defaultScope;
+  if (state.reportScope !== scope) state.reportScope = scope;
+  const requestedSessionId = state.reportSessionId || 'toutes';
+  const requestedSession = d.sessions.find(session => session.id === requestedSessionId);
+  const sessionId = scope !== 'global' && requestedSession && requestedSession.programmeId === scope
+    ? requestedSessionId
+    : 'toutes';
+  state.reportSessionId = sessionId;
+  const globalLabel = isPresidentReadOnly() && !state.account.scopeGlobal ? 'Tous les programmes autorisés' : 'Tous les programmes';
+  const scopeOptions = (globalAllowed ? [`<option value="global" ${scope === 'global' ? 'selected' : ''}>${globalLabel}</option>`] : []).concat(
+    allowedProgrammes.map(p => `<option value="${p.id}" ${scope === p.id ? 'selected' : ''}>${escapeHtml(p.nom)}</option>`)
   ).join('');
   const years = getAvailableYears(d);
   const months = getAvailableMonths(d, scope);
   const periodOptions = `<option value="toutes">Toutes périodes</option>`
     + (years.length ? `<optgroup label="Par année">${years.map(y => `<option value="${y}">${y}</option>`).join('')}</optgroup>` : '')
     + (months.length ? `<optgroup label="Par mois">${months.map(mo => `<option value="${mo}">${monthLabel(mo)}</option>`).join('')}</optgroup>` : '');
-  const progSessions = scope !== 'global' ? d.sessions.filter(s => s.programmeId === scope) : [];
+  const progSessions = scope !== 'global' ? d.sessions.filter(s => s.programmeId === scope && accountCanReadProgramme(s.programmeId)) : [];
   const sessionOptions = `<option value="toutes" ${sessionId === 'toutes' ? 'selected' : ''}>Toutes les séances</option>` + sessionOptionsByYear(progSessions, sessionId);
   return `
     <div class="page-head">
       <div>
-        <div class="eyebrow">Export</div>
+        <div class="eyebrow">${isPresidentReadOnly() ? 'Consultation' : 'Export'}</div>
         <h1 class="page-title">Rapports</h1>
-        <p class="page-sub">Générez un rapport statistique détaillé, global, par programme, par mois ou pour une séance précise, signé et prêt à partager.</p>
+        <p class="page-sub">${isPresidentReadOnly() ? 'Consultez les données de présence dans la portée autorisée et générez un rapport PDF signé au nom du Collège des présidents.' : 'Générez un rapport statistique détaillé, global, par programme, par mois ou pour une séance précise, signé et prêt à partager.'}</p>
       </div>
     </div>
     <div class="grid grid-2">
@@ -47,28 +63,29 @@ function renderRapports() {
         <p style="font-size:12.5px;color:var(--ink-faint);line-height:1.6;">
           ${sessionId !== 'toutes' && scope !== 'global'
             ? 'Le rapport listera la présence de chaque membre pour cette séance précise, avec le taux de présence associé.'
-            : 'Le rapport inclura : effectifs, répartition Hommes/Femmes, taux de présence, taux d’absence et taux de participation globaux ou filtrés selon la portée et la période choisies (année entière ou un mois précis).'}
+            : 'Le rapport inclura : effectifs, répartition Hommes/Femmes, taux de présence, taux d’absence et taux de participation — globaux ou filtrés selon la portée et la période choisies (année entière ou un mois précis).'}
         </p>
         <div style="margin-top:18px;">
           <button class="btn btn-primary" id="genPdfBtn">${ICONS.download} Générer le PDF</button>
         </div>
       </div>
       <div class="card">
-        <h3 class="card-title">Signature</h3>
+        <h3 class="card-title">Signature du rapport</h3>
         <div class="card-sub">Ajoutée automatiquement en pied de rapport</div>
         <div class="ledger-row" style="border-bottom:none;">
           <div class="avatar" style="margin-right:4px;">${(d.profile.name || '?').trim()[0]?.toUpperCase() || '?'}</div>
           <div>
             <div style="font-weight:700;font-family:'Fraunces',serif;font-size:15px;">${escapeHtml(d.profile.name)}</div>
+            <div style="font-size:12px;color:var(--ink-faint);">${isPresidentReadOnly() ? 'Collège des présidents' : 'Commission Administrative'}</div>
             <div style="font-size:12px;color:var(--ink-faint);" class="mono">Généré le ${fmtDate(todayISO())} à ${nowTime()}</div>
           </div>
         </div>
-        <button class="btn btn-ghost btn-sm" id="changeSignataireBtn" style="margin-top:14px;">Changer le signataire</button>
+        ${isPresidentReadOnly() ? '' : '<button class="btn btn-ghost btn-sm" id="changeSignataireBtn" style="margin-top:14px;">Changer le signataire</button>'}
       </div>
     </div>
     <div class="card" style="margin-top:20px;">
       <h3 class="card-title" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
-        <span>Répertoire d'absences consécutives</span>
+        <span>Répertoire — absences consécutives</span>
         <span style="display:flex;align-items:center;gap:8px;font-size:12px;font-weight:600;color:var(--ink-dim);flex-wrap:wrap;">
           Programme
           <select id="watchlistProgramme" style="padding:5px 8px;">
@@ -106,6 +123,11 @@ function attachRapportsEvents() {
   });
   const scopeSel = document.getElementById('reportScope');
   if (scopeSel) scopeSel.addEventListener('change', e => {
+    if (!accountCanReadReportScope(e.target.value)) {
+      showToast('Cette portée ne fait pas partie des accès attribués à votre compte');
+      render();
+      return;
+    }
     state.reportScope = e.target.value;
     state.reportSessionId = 'toutes';
     render();

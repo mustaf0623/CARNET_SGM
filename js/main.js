@@ -12,18 +12,48 @@ async function startApp() {
   let remoteReady = false;
   if (sb && sbUser) {
     try {
-      if (localData && syncState.pending) {
+      const account = await fetchCurrentAccount();
+      if (!account || !account.role) {
+        state.data = emptyData();
+        renderAccountAccessScreen(
+          'Compte en attente d’activation',
+          'Un administrateur CA doit attribuer un rôle à ce compte avant l’accès aux données.'
+        );
+        return;
+      }
+      if (localData && syncState.pending && account.role === 'ca') {
         state.data = localData;
         if (!await pushToSupabase()) throw new Error('synchronisation locale impossible');
       }
       data = await pullFromSupabase();
-      if (!data.profile.name && localData && localData.profile.name) data.profile.name = localData.profile.name;
+      state.account = data.account;
+      delete data.account;
       await idbSet('carnet-data', data);
       remoteReady = true;
     } catch (e) {
-      data = localData || emptyData();
-      showToast('Connexion au serveur impossible — mode hors-ligne local');
+      const cachedAccount = cachedAccountAccess(sbUser.id);
+      if (cachedAccount && cachedAccount.role) {
+        state.account = cachedAccount;
+        if (cachedAccount.role === 'president' && !cachedAccount.scopeGlobal) {
+          data = emptyData();
+          data.profile.name = cachedAccount.name || '';
+          showToast('Hors ligne : les données de votre portée doivent être rechargées après reconnexion');
+        } else {
+          data = localData || emptyData();
+          showToast('Connexion au serveur impossible — les données locales restent disponibles');
+        }
+      } else {
+        state.data = emptyData();
+        renderAccountAccessScreen(
+          'Accès indisponible',
+          'Impossible de vérifier le rôle du compte. Vérifiez la connexion et réessayez.'
+        );
+        console.error('Carnet SGM — impossible de vérifier les droits du compte:', e);
+        return;
+      }
     }
+  } else {
+    state.account = { role: 'ca', accountAdmin: false, scopeGlobal: true, scopeProgrammeIds: [] };
   }
   state.data = data;
   if (sb && sbUser) { updateSnapshotsFromCurrent(); if (remoteReady) await saveSyncState(false); subscribeRealtime(); }
@@ -53,24 +83,46 @@ document.getElementById('syncBtn').addEventListener('click', () => reconcileSync
       sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       sb.auth.onAuthStateChange((event, session) => {
         const newUser = session ? session.user : null;
-        const regained = !sbUser && newUser;
+        if ((sbUser && !newUser) || (sbUser && newUser && sbUser.id !== newUser.id)) state.account = null;
         sbUser = newUser;
-        if (regained && state.data) reconcileSync();
       });
       // En cas de perte de réseau au moment précis du chargement, on retente
       // dès que la connexion revient plutôt que d'attendre indéfiniment.
       window.addEventListener('online', async () => {
         if (!sb) return;
         const newUser = await getSupabaseUser();
-        if (newUser && !sbUser) { sbUser = newUser; if (state.data) reconcileSync(); }
+        if (newUser && (!sbUser || sbUser.id !== newUser.id)) {
+          state.account = null;
+          sbUser = newUser;
+          if (state.data) await startApp();
+        }
       });
-    } catch (e) { sb = null; }
+    } catch (e) {
+      sb = null;
+      console.error('Carnet SGM — impossible de configurer la connexion Supabase:', e);
+    }
   }
 
   await minSplash;
   document.getElementById('splash').classList.add('hide');
 
   if (localData) {
+    if (supabaseConfigured()) {
+      if (!sb) {
+        renderAccountAccessScreen(
+          'Connexion requise',
+          'Impossible de vérifier les droits du compte. Réessayez lorsque la connexion sera disponible.'
+        );
+        return;
+      }
+      sbUser = await getSupabaseUser();
+      if (!sbUser) {
+        renderAuthScreen();
+        return;
+      }
+      await startApp();
+      return;
+    }
     // Des données existent déjà sur cet appareil : on entre dans l'app
     // immédiatement, connecté ou non — SANS attendre Supabase, dont la
     // vérification de session (getSupabaseUser) peut être lente hors-ligne
@@ -78,6 +130,7 @@ document.getElementById('syncBtn').addEventListener('click', () => reconcileSync
     // plusieurs dizaines de secondes à être constaté). C'est le bug qui
     // rendait l'ouverture très lente hors-ligne : on attendait cette
     // vérification avant même d'afficher l'app.
+    state.account = { role: 'ca', accountAdmin: false, scopeGlobal: true, scopeProgrammeIds: [] };
     state.data = localData;
     render();
     // Important : on NE marque PAS ces données comme déjà synchronisées ici.

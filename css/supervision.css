@@ -1,0 +1,16 @@
+/* css/supervision.css — Présentation des indicateurs de supervision */
+
+.supervision-filters{ display:flex; gap:10px; flex-wrap:wrap; }
+.supervision-filters select{ min-width:170px; }
+.supervision-meta{ min-width:72px; color:var(--ink-faint); font-size:11px; text-align:right; }
+.supervision-signal{ margin:0; padding:14px; border:1px solid var(--line); border-radius:var(--radius-sm); background:var(--card-2); color:var(--ink-dim); font-size:13px; line-height:1.6; }
+.supervision-signal.is-up{ background:var(--emerald-tint); color:var(--emerald-dim); }
+.supervision-signal.is-down{ background:var(--terracotta-tint); color:var(--terracotta-dim); }
+.table-wrap{ overflow-x:auto; }
+
+@media (max-width:600px){
+  .supervision-filters{ width:100%; }
+  .supervision-filters .field{ flex:1; min-width:0; }
+  .supervision-filters select{ min-width:0; width:100%; }
+  .supervision-meta{ min-width:56px; }
+}

@@ -27,6 +27,24 @@ function renderAuthScreen(errorMsg) {
     document.getElementById('authBackBtn2').addEventListener('click', render);
   }
 }
+function renderAccountAccessScreen(title, message) {
+  const app = document.getElementById('app');
+  app.innerHTML = `
+    <div class="onboard-overlay">
+      <div class="onboard-card">
+        <div class="onboard-mark">${ICONS.mark}</div>
+        <h2>${escapeHtml(title)}</h2>
+        <p>${escapeHtml(message)}</p>
+        <button class="btn btn-primary" id="accessRetryBtn" style="width:100%;justify-content:center;margin-bottom:8px;">Vérifier à nouveau</button>
+        <button class="btn btn-ghost" id="accessSignOutBtn" style="width:100%;justify-content:center;">Se déconnecter</button>
+      </div>
+    </div>`;
+  document.getElementById('accessRetryBtn').addEventListener('click', async event => {
+    event.currentTarget.disabled = true;
+    await startApp();
+  });
+  document.getElementById('accessSignOutBtn').addEventListener('click', signOutSupabase);
+}
 async function submitAuth() {
   const email = document.getElementById('authEmail').value.trim();
   const password = document.getElementById('authPassword').value;
@@ -41,7 +59,11 @@ async function submitAuth() {
     const redirectTo = window.location.origin + window.location.pathname;
     const fn = authMode === 'login'
       ? () => sb.auth.signInWithPassword({ email, password })
-      : () => sb.auth.signUp({ email, password, options: { emailRedirectTo: redirectTo } });
+      : () => sb.auth.signUp({
+        email,
+        password,
+        options: { emailRedirectTo: redirectTo, data: { name: email.split('@')[0] } },
+      });
     const { data, error } = await fn();
     if (error) { renderAuthScreen(error.message); return; }
     if (authMode === 'signup' && !data.session) {
@@ -63,8 +85,11 @@ async function signOutSupabase() {
     'Se déconnecter ?',
     'Il faudra une connexion internet pour se reconnecter et retrouver l’accès à l’app sur cet appareil.',
     async () => {
+      const signedOutUserId = sbUser && sbUser.id;
       try { await sb.auth.signOut(); } catch (e) { /* on nettoie quand même localement */ }
+      if (signedOutUserId) clearCachedAccountAccess(signedOutUserId);
       sbUser = null;
+      state.account = null;
       try { await idbDelete('carnet-data'); } catch (e) { /* noop */ }
       try { await idbDelete(SYNC_STATE_KEY); } catch (e) { /* noop */ }
       try { localStorage.removeItem(LOCAL_BACKUP_KEY); } catch (e) { /* noop */ }

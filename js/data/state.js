@@ -9,6 +9,11 @@ function emptyData() {
 
 let state = {
   data: null,
+  account: null,
+  userAccounts: [],
+  userAccountsLoaded: false,
+  userAccountsLoading: false,
+  accountManagementError: '',
   tab: 'dashboard',
   absenceThreshold: 3,
   bureauView: 'reunions',
@@ -36,7 +41,26 @@ let state = {
   completeInfoQueue: [],
   reportScope: 'global',
   reportSessionId: 'toutes',
+  supervisionProgFilter: 'global',
+  supervisionYearFilter: 'toutes',
 };
+
+function isPresidentReadOnly() {
+  return state.account && state.account.role === 'president';
+}
+function canManageAccounts() {
+  return !!(state.account && state.account.role === 'ca' && state.account.accountAdmin);
+}
+function accountCanReadProgramme(programmeId) {
+  if (!state.account || state.account.role !== 'president') return true;
+  return !!state.account.scopeGlobal || (state.account.scopeProgrammeIds || []).includes(programmeId);
+}
+function accountCanReadReportScope(scope) {
+  if (!state.account || state.account.role !== 'president') return true;
+  return scope === 'global'
+    ? !!state.account.scopeGlobal || !!(state.account.scopeProgrammeIds || []).length
+    : accountCanReadProgramme(scope);
+}
 
 function ensureBureauFields(data) {
   if (!data) return data;
@@ -54,6 +78,10 @@ async function loadData() {
   return null;
 }
 async function saveData(options = {}) {
+  if (isPresidentReadOnly()) {
+    showToast('Votre compte est en lecture seule');
+    return false;
+  }
   // Copie synchrone avant toute attente : elle reste disponible même si l'app se ferme maintenant.
   try { localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify(state.data)); } catch (e) { /* stockage indisponible */ }
   await saveSyncState(true);
@@ -68,6 +96,10 @@ async function saveData(options = {}) {
 }
 
 async function resetAppData() {
+  if (isPresidentReadOnly()) {
+    showToast('Votre compte est en lecture seule');
+    return;
+  }
   const keepName = state.data?.profile?.name || '';
   state.data = emptyData();
   state.data.profile.name = keepName;
