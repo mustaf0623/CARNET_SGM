@@ -11,6 +11,7 @@ function render() {
     );
     return;
   }
+  if (!accountCanAccessTab(state.tab)) state.tab = 'dashboard';
   if (!state.data.profile.name) {
     if (isPresidentReadOnly()) {
       renderAccountAccessScreen(
@@ -34,12 +35,12 @@ function render() {
         </div>
       </div>
       <nav class="tabs">
-        ${tabBtn('dashboard', ICONS.dashboard, 'Tableau de bord')}
-        ${tabBtn('pointage', ICONS.pointage, 'Pointage')}
-        ${tabBtn('membres', ICONS.membres, 'Membres')}
-        ${tabBtn('rapports', ICONS.rapports, 'Rapports')}
-        ${tabBtn('supervision', ICONS.supervision, 'Supervision')}
-        ${tabBtn('bureau', ICONS.bureau, 'Bureau')}
+        ${accountCanAccessTab('dashboard') ? tabBtn('dashboard', ICONS.dashboard, 'Tableau de bord') : ''}
+        ${accountCanAccessTab('pointage') ? tabBtn('pointage', ICONS.pointage, 'Pointage') : ''}
+        ${accountCanAccessTab('membres') ? tabBtn('membres', ICONS.membres, 'Membres') : ''}
+        ${accountCanAccessTab('rapports') ? tabBtn('rapports', ICONS.rapports, 'Rapports') : ''}
+        ${accountCanAccessTab('supervision') ? tabBtn('supervision', ICONS.supervision, 'Supervision') : ''}
+        ${accountCanAccessTab('bureau') ? tabBtn('bureau', ICONS.bureau, 'Bureau') : ''}
         ${canManageAccounts() ? tabBtn('comptes', ICONS.comptes, 'Comptes') : ''}
       </nav>
       <div class="sidebar-footer">
@@ -60,17 +61,17 @@ function render() {
       <div class="view" id="view">${renderTab()}</div>
     </main>
   `;
-  if (state.renameModalOpen) app.innerHTML += renderRenameModal();
+  if (state.renameModalOpen && !isPresidentReadOnly()) app.innerHTML += renderRenameModal();
   if (state.confirmModalOpen) app.innerHTML += renderConfirmModal();
-  if (state.memberDetailId) app.innerHTML += renderMemberDetailModal();
-  if (state.completeInfoQueue && state.completeInfoQueue.length) app.innerHTML += renderCompleteInfoModal();
+  if (state.memberDetailId && accountCanAccessTab('membres')) app.innerHTML += renderMemberDetailModal();
+  if (!isPresidentReadOnly() && state.completeInfoQueue && state.completeInfoQueue.length) app.innerHTML += renderCompleteInfoModal();
   if (state.bureauMemberDetailMembreId) app.innerHTML += renderBureauMemberDetailModal();
   attachShellEvents();
   attachTabEvents();
-  if (state.renameModalOpen) attachRenameModal();
+  if (state.renameModalOpen && !isPresidentReadOnly()) attachRenameModal();
   if (state.confirmModalOpen) attachConfirmModal();
-  if (state.memberDetailId) attachMemberDetailModal();
-  if (state.completeInfoQueue && state.completeInfoQueue.length) attachCompleteInfoModal();
+  if (state.memberDetailId && accountCanAccessTab('membres')) attachMemberDetailModal();
+  if (!isPresidentReadOnly() && state.completeInfoQueue && state.completeInfoQueue.length) attachCompleteInfoModal();
   if (state.bureauMemberDetailMembreId) attachBureauMemberDetailModal();
   if (isPresidentReadOnly()) applyReadOnlyUi();
 }
@@ -87,18 +88,27 @@ function applyReadOnlyUi() {
     '.member-name-link',
     '#memberDetailCloseBtn',
     '#memberDetailCloseFixedBtn',
+    '#bureauMemberDetailCloseBtn',
+    '#bureauMemberDetailCloseFixedBtn',
   ];
   document.querySelectorAll('main button').forEach(button => {
-    if (!allowedButtons.some(selector => button.matches(selector))) button.disabled = true;
+    if (!allowedButtons.some(selector => button.matches(selector))) button.hidden = true;
   });
   const allowedControls = [
     '#progSelect', '#sessionSelect', '#memberSearch',
     '#dashFilter', '#dashYearFilter', '#reportScope', '#reportSession', '#reportYear',
-    '#watchlistProgramme', '#absenceThreshold', '#memberDetailYear',
+    '#watchlistProgramme', '#absenceThreshold', '#memberDetailYear', '#membreSearch',
     '#bureauMandatSelect', '#bureauReunionSearch',
+    '#supervisionProgramme', '#supervisionYear', '#supervisionLieuA', '#supervisionLieuB',
   ];
   document.querySelectorAll('main input, main select, main textarea').forEach(control => {
-    if (!allowedControls.some(selector => control.matches(selector))) control.disabled = true;
+    if (!allowedControls.some(selector => control.matches(selector))) {
+      const label = control.closest('label');
+      const field = control.closest('.field');
+      if (label) label.hidden = true;
+      else if (field) field.hidden = true;
+      else control.hidden = true;
+    }
   });
 }
 
@@ -122,6 +132,7 @@ function attachShellEvents() {
 
 /* ================= TAB ROUTER ================= */
 function renderTab() {
+  if (!accountCanAccessTab(state.tab)) return '';
   if (state.tab === 'dashboard') return renderDashboard();
   if (state.tab === 'pointage') return renderPointage();
   if (state.tab === 'membres') return renderMembres();
@@ -132,6 +143,7 @@ function renderTab() {
   return '';
 }
 function attachTabEvents() {
+  if (!accountCanAccessTab(state.tab)) return;
   if (state.tab === 'dashboard') attachDashboardEvents();
   if (state.tab === 'pointage') attachPointageEvents();
   if (state.tab === 'membres') attachMembresEvents();

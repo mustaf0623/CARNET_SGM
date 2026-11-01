@@ -6,6 +6,29 @@
    ========================================================= */
 
 /* ================= INIT ================= */
+async function clearLocalDataCache() {
+  for (const key of ['carnet-data', SYNC_STATE_KEY]) {
+    try { await idbDelete(key); }
+    catch (e) { console.error('Carnet SGM — impossible d’effacer le cache IndexedDB ' + key + ':', e); }
+  }
+  for (const key of [LOCAL_BACKUP_KEY, SYNC_STATE_BACKUP_KEY]) {
+    try { localStorage.removeItem(key); }
+    catch (e) { console.error('Carnet SGM — impossible d’effacer la copie locale ' + key + ':', e); }
+  }
+  Object.keys(snapshotMaps).forEach(table => snapshotMaps[table].clear());
+  syncState = { pending: false, snapshots: null };
+  if (sbUser) clearCachedAccountAccess(sbUser.id);
+  else {
+    try {
+      for (let index = localStorage.length - 1; index >= 0; index--) {
+        const key = localStorage.key(index);
+        if (key && key.startsWith('carnet-account-access-')) localStorage.removeItem(key);
+      }
+      localStorage.removeItem(LAST_AUTH_ACCOUNT_KEY);
+    } catch (e) { console.error('Carnet SGM — impossible d’effacer les rôles mémorisés:', e); }
+  }
+}
+
 async function startApp() {
   const localData = await loadData();
   let data = localData || emptyData();
@@ -15,6 +38,7 @@ async function startApp() {
       const account = await fetchCurrentAccount();
       if (!account || !account.role) {
         state.data = emptyData();
+        await clearLocalDataCache();
         renderAccountAccessScreen(
           'Compte en attente d’activation',
           'Un administrateur CA doit attribuer un rôle à ce compte avant l’accès aux données.'
@@ -44,6 +68,7 @@ async function startApp() {
         }
       } else {
         state.data = emptyData();
+        await clearLocalDataCache();
         renderAccountAccessScreen(
           'Accès indisponible',
           'Impossible de vérifier le rôle du compte. Vérifiez la connexion et réessayez.'
@@ -56,16 +81,34 @@ async function startApp() {
     state.account = { role: 'ca', accountAdmin: false, scopeGlobal: true, scopeProgrammeIds: [] };
   }
   state.data = data;
-  if (sb && sbUser) { updateSnapshotsFromCurrent(); if (remoteReady) await saveSyncState(false); subscribeRealtime(); }
+  if (sb && sbUser) {
+    updateSnapshotsFromCurrent();
+    if (remoteReady || (state.account.role === 'president' && !state.account.scopeGlobal)) {
+      await saveSyncState(false);
+    }
+    try { localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify(state.data)); }
+    catch (e) { console.error('Carnet SGM — impossible de mettre à jour la copie locale filtrée:', e); }
+    if (state.account.role === 'president' && !state.account.scopeGlobal) {
+      try { await idbSet('carnet-data', state.data); }
+      catch (e) { console.error('Carnet SGM — impossible de remplacer le cache local par la portée autorisée:', e); }
+    }
+    subscribeRealtime();
+  }
   render();
 }
 
-function showCachedAccountOffline(localData, account) {
+async function showCachedAccountOffline(localData, account) {
   state.account = account;
   if (account.role === 'president' && !account.scopeGlobal) {
     state.data = emptyData();
     state.data.profile.name = account.name || '';
     showToast('Hors ligne : les données de votre portée doivent être rechargées après reconnexion');
+    updateSnapshotsFromCurrent();
+    await saveSyncState(false);
+    try { await idbSet('carnet-data', state.data); }
+    catch (e) { console.error('Carnet SGM — impossible d’effacer les données hors portée du cache local:', e); }
+    try { localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify(state.data)); }
+    catch (e) { console.error('Carnet SGM — impossible d’effacer la copie locale hors portée:', e); }
   } else {
     state.data = localData;
     showToast('Session indisponible — les données locales restent disponibles');
@@ -131,8 +174,11 @@ document.getElementById('syncBtn').addEventListener('click', () => reconcileSync
       sbUser = await getSupabaseUser();
       if (!sbUser) {
         const cachedAccount = cachedLastAccountAccess();
-        if (cachedAccount) showCachedAccountOffline(localData, cachedAccount);
-        else renderAuthScreen();
+        if (cachedAccount) await showCachedAccountOffline(localData, cachedAccount);
+        else {
+          await clearLocalDataCache();
+          renderAuthScreen();
+        }
         return;
       }
       await startApp();

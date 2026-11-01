@@ -3,12 +3,14 @@
 /* ================= MEMBRES ================= */
 function renderMembres() {
   const d = state.data;
+  const readOnly = isPresidentReadOnly();
+  const allowedProgrammes = d.programmes.filter(programme => accountCanReadProgramme(programme.id));
   return `
     <div class="page-head">
       <div>
         <div class="eyebrow">Base de données</div>
         <h1 class="page-title">Membres &amp; programmes</h1>
-        <p class="page-sub">Gérez vos programmes, ajoutez des membres un par un ou importez un fichier Excel existant.</p>
+        <p class="page-sub">${readOnly ? 'Consultez les membres et les programmes de votre portée autorisée.' : 'Gérez vos programmes, ajoutez des membres un par un ou importez un fichier Excel existant.'}</p>
       </div>
     </div>
     <div class="grid grid-2" style="align-items:start;">
@@ -22,21 +24,21 @@ function renderMembres() {
             <div style="display:flex;align-items:center;gap:14px;">
               <div class="prog-name" style="flex:1;">${escapeHtml(p.nom)}</div>
               <div style="color:var(--ink-faint);font-size:12px;" class="mono">${d.membres.filter(m => memberInProgramme(m, p.id)).length} membres</div>
-              <button class="edit-name-btn delete-prog-btn" data-id="${p.id}" style="color:var(--terracotta);">supprimer</button>
+              ${readOnly ? '' : `<button class="edit-name-btn delete-prog-btn" data-id="${p.id}" style="color:var(--terracotta);">supprimer</button>`}
             </div>
-            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:11.5px;color:var(--ink-faint);">
+            ${readOnly ? '' : `<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;font-size:11.5px;color:var(--ink-faint);">
               <span>Prioritaire pour :</span>
               ${cats.map(c => `<label style="display:flex;align-items:center;gap:4px;cursor:pointer;"><input type="checkbox" class="progPrioCheckbox" data-prog="${p.id}" data-cat="${c}" ${prio.includes(c) ? 'checked' : ''}>${c}</label>`).join('')}
               ${!prio.length ? `<span style="font-style:italic;">— aucune coché : absences comptées pour tous, comme avant —</span>` : ''}
-            </div>
+            </div>`}
           </div>`;
         }).join('') || emptyRow('Aucun programme pour l’instant.')}</div>
-        <div style="display:flex;gap:8px;margin-top:16px;">
+        ${readOnly ? '' : `<div style="display:flex;gap:8px;margin-top:16px;">
           <input type="text" id="newProgName" placeholder="Nom du nouveau programme" style="flex:1;">
           <button class="btn btn-primary btn-sm" id="addProgBtn">${ICONS.plus} Ajouter</button>
-        </div>
+        </div>`}
       </div>
-      <div class="card">
+      ${readOnly ? '' : `<div class="card">
         <h3 class="card-title">Ajouter un membre</h3>
         <div class="card-sub">Saisie manuelle</div>
         <div class="field" style="margin-bottom:10px;"><label>Prénom</label><input type="text" id="newPrenom" style="width:100%;"></div>
@@ -79,17 +81,17 @@ function renderMembres() {
           <input type="text" id="newMembreContact" placeholder="Téléphone ou email" style="width:100%;">
         </div>
         <button class="btn btn-primary" id="addMembreBtn" style="width:100%;justify-content:center;">${ICONS.plus} Ajouter le membre</button>
-      </div>
+      </div>`}
     </div>
 
-    <div class="card" style="margin-top:16px;">
+    ${readOnly ? '' : `<div class="card" style="margin-top:16px;">
       <h3 class="card-title">Importer un fichier Excel</h3>
       <div class="card-sub">Les en-têtes déjà présentes dans votre fichier seront reconnues et associées automatiquement</div>
       ${renderImportZone()}
-    </div>
+    </div>`}
 
     <div class="card" style="margin-top:16px;">
-      <h3 class="card-title">Tous les membres</h3>
+      <h3 class="card-title">${readOnly ? 'Membres de la portée autorisée' : 'Tous les membres'}</h3>
       <div class="card-sub">${d.membres.length} au total${d.membres.some(m => m.ap) ? ' · ' + d.membres.filter(m => m.ap).length + ' membre(s) ponctuel(s) (AP)' : ''}</div>
       <div style="margin:12px 0 14px;">
         <input type="text" id="membreSearch" placeholder="Rechercher un membre (nom, prénom...)" value="${escapeHtml(state.membreSearch || '')}" style="width:100%;">
@@ -103,13 +105,21 @@ function renderMembres() {
         }) : d.membres;
         if (!d.membres.length) return emptyRow('Aucun membre pour l’instant.');
         if (!filtered.length) return emptyRow('Aucun membre ne correspond à cette recherche.');
-        return `<table class="data-table"><thead><tr><th>Nom</th><th>Sexe</th><th>Programmes</th><th></th></tr></thead><tbody>
-        ${filtered.map(m => `<tr><td><button class="member-name-link" data-id="${m.id}" style="background:none;border:none;padding:0;color:var(--ink);font-weight:700;cursor:pointer;text-decoration:underline;text-decoration-color:var(--line-strong);">${escapeHtml(m.prenom)} ${escapeHtml(m.nom)}</button>${m.ap ? ` <span class="pill" style="background:var(--gold-tint);border-color:var(--gold);color:var(--gold);">AP</span>` : ''}${m.extra && Object.keys(m.extra).length ? ` <span class="pill" style="background:var(--gold-tint);border-color:var(--gold);color:var(--gold);font-size:10px;" title="Informations importées disponibles">i</span>` : ''}</td><td>${m.sexe === 'H' ? 'Homme' : 'Femme'}</td><td>${m.ap || m.allProgrammes ? `<span class="pill" style="background:var(--emerald-tint);border-color:var(--emerald);color:var(--emerald-dim);">Tous les programmes</span>` : m.programmeIds.map(pid => `<span class="pill">${escapeHtml((d.programmes.find(p => p.id === pid) || {}).nom || '—')}</span>`).join('')}</td><td><button class="edit-name-btn delete-membre-btn" data-id="${m.id}" style="color:var(--terracotta);">supprimer</button></td></tr>`).join('')}
+        return `<table class="data-table"><thead><tr><th>Nom</th><th>Sexe</th><th>Programmes</th>${readOnly ? '' : '<th></th>'}</tr></thead><tbody>
+        ${filtered.map(m => {
+          const memberProgrammes = allowedProgrammes.filter(programme =>
+            m.ap || m.allProgrammes || (m.programmeIds || []).includes(programme.id)
+          );
+          const programmeLabels = m.ap || m.allProgrammes
+            ? `<span class="pill">${readOnly && !state.account.scopeGlobal ? 'Tous les programmes autorisés' : 'Tous les programmes'}</span>`
+            : memberProgrammes.map(programme => `<span class="pill">${escapeHtml(programme.nom)}</span>`).join('');
+          return `<tr><td><button class="member-name-link" data-id="${m.id}" style="background:none;border:none;padding:0;color:var(--ink);font-weight:700;cursor:pointer;text-decoration:underline;text-decoration-color:var(--line-strong);">${escapeHtml(m.prenom)} ${escapeHtml(m.nom)}</button>${m.ap ? ` <span class="pill" style="background:var(--gold-tint);border-color:var(--gold);color:var(--gold);">AP</span>` : ''}${m.extra && Object.keys(m.extra).length ? ` <span class="pill" style="background:var(--gold-tint);border-color:var(--gold);color:var(--gold);font-size:10px;" title="Informations importées disponibles">i</span>` : ''}</td><td>${m.sexe === 'H' ? 'Homme' : 'Femme'}</td><td>${programmeLabels || '—'}</td>${readOnly ? '' : `<td><button class="edit-name-btn delete-membre-btn" data-id="${m.id}" style="color:var(--terracotta);">supprimer</button></td>`}</tr>`;
+        }).join('')}
       </tbody></table>`;
       })()}
     </div>
 
-    <div class="card" style="margin-top:16px;">
+    ${readOnly ? '' : `<div class="card" style="margin-top:16px;">
       <h3 class="card-title">Exporter la base</h3>
       <div class="card-sub">Choisissez les colonnes à inclure, affinez les filtres si besoin, puis exportez.</div>
 
@@ -155,16 +165,16 @@ function renderMembres() {
         <button class="btn btn-primary btn-sm" id="exportXlsxBtn">Exporter en Excel (.xlsx)</button>
         <button class="btn btn-ghost btn-sm" id="exportPdfBtn">Exporter en PDF</button>
       </div>
-    </div>
+    </div>`}
 
 
-    <div class="card" style="margin-top:16px;border-color:var(--terracotta-tint);">
+    ${readOnly ? '' : `<div class="card" style="margin-top:16px;border-color:var(--terracotta-tint);">
       <h3 class="card-title" style="color:var(--terracotta-dim);">Zone sensible</h3>
       <div class="card-sub">Réinitialise entièrement l’application : programmes, membres, séances, pointages et Bureau (mandats, réunions, procès-verbaux). Votre nom de signataire est conservé.</div>
       <button class="btn" id="resetAllBtn" style="background:var(--terracotta);border-color:transparent;color:#fff;">Réinitialiser toutes les données</button>
       <div class="card-sub" style="margin-top:16px;">Supprime tous les membres (permanents et ponctuels) et leurs pointages associés; retour à zéro membre, comme s’il n’y avait jamais eu d’import. Les programmes et les séances restent intacts.</div>
       <button class="btn btn-ghost" id="clearImportedDataBtn" style="border-color:var(--terracotta);color:var(--terracotta-dim);">Supprimer tous les membres</button>
-    </div>
+    </div>`}
   `;
 }
 

@@ -173,6 +173,7 @@ async function pullFromSupabase() {
   const name = (profRes.data && profRes.data.name) || '';
   const account = accountFromProfile(profRes.data, sbUser);
   if (account && account.role) cacheAccountAccess(account);
+  else clearCachedAccountAccess(sbUser.id);
   const bureauMandats = (bMandatRes.data || []).map(r => ({ id: r.id, nom: r.nom, dateDebut: r.date_debut || '', dateFin: r.date_fin || '', actif: !!r.actif }));
   const bureauPostes = (bPosteRes.data || []).map(r => ({ id: r.id, nom: r.nom }));
   const bureauMembres = (bMembreRes.data || []).map(r => ({ id: r.id, mandatId: r.mandat_id, membreId: r.membre_id, posteId: r.poste_id }));
@@ -325,6 +326,9 @@ function handleRemoteChange() {
       state.data.bureauPresenceExtras = remote.bureauPresenceExtras;
       updateSnapshotsFromCurrent();
       await idbSet('carnet-data', state.data);
+      try { localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify(state.data)); }
+      catch (e) { console.error('Carnet SGM — impossible de mettre à jour la copie locale filtrée:', e); }
+      await saveSyncState(false);
       showToast('Données mises à jour depuis un autre appareil');
       render();
     } catch (e) {

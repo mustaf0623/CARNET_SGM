@@ -53,6 +53,14 @@ function isPresidentReadOnly() {
 function canManageAccounts() {
   return !!(state.account && state.account.role === 'ca' && state.account.accountAdmin);
 }
+function accountCanAccessTab(tab) {
+  if (!state.account) return false;
+  if (state.account.role === 'ca') return tab !== 'comptes' || canManageAccounts();
+  if (state.account.role === 'president') {
+    return ['dashboard', 'membres', 'rapports', 'supervision', 'bureau'].includes(tab);
+  }
+  return false;
+}
 function accountCanReadProgramme(programmeId) {
   if (!state.account || state.account.role !== 'president') return true;
   return !!state.account.scopeGlobal || (state.account.scopeProgrammeIds || []).includes(programmeId);

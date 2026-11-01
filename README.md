@@ -88,7 +88,17 @@ premier gestionnaire CA dès que son adresse est confirmée ; il n’y a pas de 
 à lancer séparément. Les administrateurs CA peuvent ensuite gérer les rôles, les gestionnaires
 et les portées dans l’onglet **Comptes**.
 
-Le CA dispose de tous les droits. Le président consulte les données de sa portée attribuée,
-peut générer un rapport PDF signé « Collège des présidents » et accéder à **Supervision**.
+Le CA dispose de tous les droits. Le président ne voit que les onglets de consultation autorisés
+(tableau de bord, membres, rapports, supervision et Bureau) ; les écrans de pointage et de gestion
+des comptes, ainsi que les commandes de modification, ne sont pas affichés. Les programmes
+présentés dans les fiches et rapports restent limités à sa portée. Il peut générer un rapport PDF
+signé « Collège des présidents ».
 Cette page présente les tendances, les taux par catégorie, les fréquences par lieu et des
 comparaisons descriptives programme/lieu ; ces comparaisons ne démontrent pas de causalité.
+
+Le masquage de l’interface améliore la séparation des usages mais ne constitue pas une barrière
+de sécurité : les politiques RLS de la migration restent la source d’autorisation côté serveur.
+Après une consultation en ligne, la copie locale est remplacée par les données renvoyées dans la
+portée autorisée. Hors ligne, un président sans portée globale ne voit aucune donnée et le cache
+local de données est vidé ; la révocation d’un rôle ou d’une portée nécessite toutefois une
+reconnexion pour être connue de l’appareil.

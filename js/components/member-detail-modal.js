@@ -11,6 +11,7 @@ function renderMemberDetailModal() {
   ).join('');
   const stats = memberStats(d, m.id, yearFilter);
   const categories = ['Homme', 'Femme', 'Cadet', 'Cadette', 'Père', 'Mère'];
+  const readOnly = isPresidentReadOnly();
   if (m.categorie && !categories.includes(m.categorie)) categories.push(m.categorie);
   return `
   <div class="onboard-overlay" id="memberDetailOverlay">
@@ -20,18 +21,18 @@ function renderMemberDetailModal() {
         <div class="avatar" style="width:44px;height:44px;font-size:16px;">${initials(m.nom, m.prenom)}</div>
         <div>
           <h2 style="margin:0;">${escapeHtml(m.prenom)} ${escapeHtml(m.nom)}</h2>
-          <div style="font-size:12.5px;color:var(--ink-faint);">${m.sexe === 'H' ? 'Homme' : 'Femme'}${m.categorie ? ' · Catégorie : ' + escapeHtml(m.categorie) : ''}${m.allProgrammes ? ' · Tous les programmes' : ''}</div>
+          <div style="font-size:12.5px;color:var(--ink-faint);">${m.sexe === 'H' ? 'Homme' : 'Femme'}${m.categorie ? ' · Catégorie : ' + escapeHtml(m.categorie) : ''}${m.allProgrammes ? (readOnly && !state.account.scopeGlobal ? ' · Tous les programmes autorisés' : ' · Tous les programmes') : ''}</div>
         </div>
         <select id="memberDetailYear" style="margin-left:auto;min-width:130px;">${yearOptions}</select>
       </div>
-      <div class="field" style="display:flex;align-items:end;gap:8px;margin:12px 0;">
+      ${readOnly ? '' : `<div class="field" style="display:flex;align-items:end;gap:8px;margin:12px 0;">
         <div style="flex:1;">
           <label for="memberDetailCategory">Catégorie du membre</label>
           <select id="memberDetailCategory" style="width:100%;">
             <option value="" ${!m.categorie ? 'selected' : ''}>Non définie</option>
             ${categories.map(category => `<option value="${escapeHtml(category)}" ${category === m.categorie ? 'selected' : ''}>${escapeHtml(category)}</option>`).join('')}
           </select>
-        </div>
+        </div>`}
         <button class="btn btn-primary btn-sm" id="memberDetailCategorySaveBtn" type="button">Enregistrer</button>
       </div>
       <div class="grid grid-4" style="margin:16px 0;gap:10px;">
@@ -53,18 +54,18 @@ function renderMemberDetailModal() {
       </div>
       <div class="card-title" style="font-size:14px;margin:16px 0 8px;display:flex;align-items:center;justify-content:space-between;">
         <span>Informations importées</span>
-        <button class="btn btn-ghost btn-sm" id="extraInfoAddFieldBtn" type="button">+ champ</button>
+        ${readOnly ? '' : '<button class="btn btn-ghost btn-sm" id="extraInfoAddFieldBtn" type="button">+ champ</button>'}
       </div>
       <div class="extra-info-grid" id="extraInfoGrid">
         ${Object.entries(m.extra || {}).map(([k, v]) => `<div class="extra-info-item" data-key="${escapeHtml(k)}">
           <label>${escapeHtml(k)}</label>
           <div class="extra-info-row">
-            <input type="text" class="extraInfoValueInput" value="${escapeHtml(String(v))}">
-            <button type="button" class="extra-info-remove" title="Supprimer ce champ">×</button>
+            ${readOnly ? `<span>${escapeHtml(String(v))}</span>` : `<input type="text" class="extraInfoValueInput" value="${escapeHtml(String(v))}">
+            <button type="button" class="extra-info-remove" title="Supprimer ce champ">×</button>`}
           </div>
         </div>`).join('') || `<div style="font-size:12px;color:var(--ink-faint);grid-column:1/-1;">Aucune information importée pour ce membre.</div>`}
       </div>
-      <button class="btn btn-primary btn-sm" id="extraInfoSaveBtn" type="button" style="width:100%;justify-content:center;margin-top:10px;">Enregistrer ces informations</button>
+      ${readOnly ? '' : '<button class="btn btn-primary btn-sm" id="extraInfoSaveBtn" type="button" style="width:100%;justify-content:center;margin-top:10px;">Enregistrer ces informations</button>'}
       <button class="btn btn-ghost" id="memberDetailCloseBtn" style="width:100%;justify-content:center;margin-top:16px;">Fermer</button>
     </div>
   </div>`;

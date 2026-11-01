@@ -3,7 +3,8 @@
 /* ================= AUTH (Supabase) ================= */
 let authMode = 'login'; // 'login' | 'signup'
 function renderAuthScreen(errorMsg) {
-  const canGoBack = !!(state.data && (state.data.programmes.length || state.data.membres.length || state.data.sessions.length));
+  const canGoBack = !supabaseConfigured()
+    && !!(state.data && (state.data.programmes.length || state.data.membres.length || state.data.sessions.length));
   document.getElementById('app').innerHTML = `
   <div class="onboard-overlay" style="position:fixed;">
     <div class="onboard-card" style="position:relative;">
