@@ -96,7 +96,7 @@ function buildExportPdf(rows) {
   doc.setFont('times', 'bold'); doc.setFontSize(15); doc.setTextColor(...ink);
   doc.text('Carnet SGM — Export des membres', margin, y); y += 7;
   doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(...faint);
-  doc.text(`${rows.length} membre${rows.length > 1 ? 's' : ''} — généré le ${fmtDate(todayISO())} à ${nowTime()}`, margin, y);
+  doc.text(`${rows.length} membre${rows.length > 1 ? 's' : ''} généré le ${fmtDate(todayISO())} à ${nowTime()}`, margin, y);
   y += 6;
   drawHeaderRow();
 
