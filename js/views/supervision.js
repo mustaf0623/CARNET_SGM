@@ -67,6 +67,46 @@ function supervisionBreakdowns(data, sessions) {
   };
 }
 
+function supervisionActivityStatus(member) {
+  const extra = member.extra || {};
+  const activityFields = Object.entries(extra).filter(([key]) => {
+    const normalizedKey = key.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    return normalizedKey.includes('activite');
+  });
+  for (const [, value] of activityFields) {
+    const normalizedValue = String(value || '').toLowerCase().normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
+    if (normalizedValue === 'actif' || normalizedValue === 'active') return 'actif';
+    if (normalizedValue === 'moyen' || normalizedValue === 'moyenne') return 'moyen';
+    if (normalizedValue === 'pas du tout' || normalizedValue.startsWith('pas du tout ')) return 'pasDuTout';
+  }
+  return 'nonRenseigne';
+}
+
+function supervisionActivityBreakdown(members) {
+  const categories = new Map();
+  const totals = { actif: 0, moyen: 0, pasDuTout: 0, nonRenseigne: 0, total: 0 };
+  members.forEach(member => {
+    const category = normaliseCategorie(member.categorie)
+      || String(member.categorie || '').trim()
+      || 'Non définie';
+    const row = categories.get(category) || {
+      name: category, actif: 0, moyen: 0, pasDuTout: 0, nonRenseigne: 0, total: 0,
+    };
+    const status = supervisionActivityStatus(member);
+    row[status]++;
+    row.total++;
+    totals[status]++;
+    totals.total++;
+    categories.set(category, row);
+  });
+  return {
+    categories: Array.from(categories.values())
+      .sort((a, b) => b.total - a.total || a.name.localeCompare(b.name, 'fr')),
+    totals,
+  };
+}
+
 function supervisionTrend(sessions, data) {
   const byMonth = new Map();
   sessions.forEach(session => {
@@ -140,6 +180,14 @@ function renderSupervision() {
   const sessions = supervisionSessions(d, programmeId, year);
   const overall = supervisionRate(sessions.map(session => sessionStats(d, session.id)));
   const breakdowns = supervisionBreakdowns(d, sessions);
+  const activityMembers = d.membres.filter(member => {
+    if (programmeId !== 'global') return memberInProgramme(member, programmeId);
+    if (isPresidentReadOnly() && !state.account.scopeGlobal) {
+      return allowedProgrammes.some(programme => memberInProgramme(member, programme.id));
+    }
+    return true;
+  });
+  const activityBreakdown = supervisionActivityBreakdown(activityMembers);
   const venues = Array.from(new Set(sessions.map(session => sessionLieu(session).trim()).filter(Boolean)))
     .sort((a, b) => a.localeCompare(b, 'fr'));
   if (!venues.includes(state.supervisionLieuA)) state.supervisionLieuA = venues[0] || '';
@@ -179,6 +227,9 @@ function renderSupervision() {
     const rate = row.total ? Math.round((row.present / row.total) * 100) : 0;
     return `<tr><td>${escapeHtml(row.programmeName)}</td><td>${escapeHtml(row.place)}</td><td>${row.sessions}</td><td>${rate}%</td></tr>`;
   }).join('');
+  const activityRows = activityBreakdown.categories.map(row =>
+    `<tr><td>${escapeHtml(row.name)}</td><td>${row.actif}</td><td>${row.moyen}</td><td>${row.pasDuTout}</td><td>${row.nonRenseigne}</td><td>${row.total}</td></tr>`
+  ).join('');
   const signalText = !signal
     ? 'Au moins six séances sont nécessaires pour comparer les trois dernières aux trois précédentes.'
     : signal.difference > 5
@@ -252,6 +303,15 @@ function renderSupervision() {
         <h3 class="card-title">Taux de présence par catégorie</h3>
         <div class="card-sub">Présences rapportées aux pointages de chaque catégorie</div>
         <div class="ledger">${categoryRows || emptyRow('Aucune donnée de catégorie pour cette portée.')}</div>
+      </div>
+      <div class="card">
+        <h3 class="card-title">Membres par statut d’activité</h3>
+        <div class="card-sub">Effectifs par catégorie, selon le programme sélectionné ; indépendants de la période des séances.</div>
+        <div class="table-wrap"><table class="data-table">
+          <thead><tr><th>Catégorie</th><th>Actif</th><th>Moyen</th><th>Pas du tout</th><th>Non renseigné</th><th>Total</th></tr></thead>
+          <tbody>${activityRows || '<tr><td colspan="6">Aucun membre pour ce programme.</td></tr>'}</tbody>
+          ${activityRows ? `<tfoot><tr><th>Total</th><th>${activityBreakdown.totals.actif}</th><th>${activityBreakdown.totals.moyen}</th><th>${activityBreakdown.totals.pasDuTout}</th><th>${activityBreakdown.totals.nonRenseigne}</th><th>${activityBreakdown.totals.total}</th></tr></tfoot>` : ''}
+        </table></div>
       </div>
       <div class="card">
         <h3 class="card-title">Fréquence et taux par lieu</h3>
