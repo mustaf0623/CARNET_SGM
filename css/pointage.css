@@ -11,6 +11,14 @@ select, input[type=text], input[type=date], input[type=file]{
 input[type=date]{ min-width:150px; }
 select:focus, input:focus{ border-color:var(--emerald); }
 
+.pointage-list-header{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:14px; }
+.pointage-list-header .card-title{ margin:0; }
+.pointage-search{ position:relative; display:block; }
+.pointage-search svg{ position:absolute; left:11px; top:50%; width:16px; height:16px; transform:translateY(-50%); color:var(--ink-faint); pointer-events:none; }
+.pointage-search input{ width:260px; max-width:100%; min-width:0; padding-left:34px; }
+.pointage-search-empty{ padding:14px 6px; color:var(--ink-faint); font-size:12.5px; }
+.member-row[hidden]{ display:none; }
+
 .member-row{ display:flex; align-items:center; gap:14px; padding:12px 6px; border-bottom:1px dashed var(--line); }
 .member-avatar{
   width:32px;height:32px;border-radius:50%; flex-shrink:0;
