@@ -162,7 +162,7 @@ function renderMembres() {
       <h3 class="card-title" style="color:var(--terracotta-dim);">Zone sensible</h3>
       <div class="card-sub">Réinitialise entièrement l’application : programmes, membres, séances, pointages et Bureau (mandats, réunions, procès-verbaux). Votre nom de signataire est conservé.</div>
       <button class="btn" id="resetAllBtn" style="background:var(--terracotta);border-color:transparent;color:#fff;">Réinitialiser toutes les données</button>
-      <div class="card-sub" style="margin-top:16px;">Supprime tous les membres (permanents et ponctuels) et leurs pointages associés — retour à zéro membre, comme s’il n’y avait jamais eu d’import. Les programmes et les séances restent intacts.</div>
+      <div class="card-sub" style="margin-top:16px;">Supprime tous les membres (permanents et ponctuels) et leurs pointages associés; retour à zéro membre, comme s’il n’y avait jamais eu d’import. Les programmes et les séances restent intacts.</div>
       <button class="btn btn-ghost" id="clearImportedDataBtn" style="border-color:var(--terracotta);color:var(--terracotta-dim);">Supprimer tous les membres</button>
     </div>
   `;
