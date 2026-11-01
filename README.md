@@ -54,29 +54,18 @@ Après une modification du schéma Supabase, réexécuter `supabase-setup.sql` d
 du projet avant de déployer l'application. Le script est rejouable et ajoute notamment la
 protection contre l'enregistrement de deux pointages identiques pour une même séance.
 
-## Correctif : ouverture très lente hors-ligne
+## Continuité hors-ligne et expiration de session
 
-**Cause.** Au démarrage, l'app attendait (`await sb.auth.getSession()`) la
-réponse de Supabase **avant même d'afficher l'interface** — y compris quand
-des données locales existaient déjà. Hors-ligne, cet appel n'échoue pas
-toujours instantanément : si l'appareil est connecté à un Wi-Fi/réseau mobile
-sans accès Internet réel (signal faible, portail captif…), le navigateur met
-souvent plusieurs dizaines de secondes à constater l'échec avant d'abandonner
-la requête — et l'app restait bloquée sur l'écran de démarrage tout ce
-temps-là.
+`getSupabaseUser()` (dans `js/data/sync.js`) borne la vérification de session
+à 4 secondes. Si une session est expirée ou indisponible, l'app utilise les
+données locales et le rôle du dernier compte vérifié au lieu de renvoyer
+l'utilisateur à l'écran de connexion. Les changements restent locaux et
+seront synchronisés quand une session valide sera de nouveau disponible.
 
-**Correctif.** `getSupabaseUser()` (dans `js/data/sync.js`) borne cet appel à
-4 secondes maximum ; au-delà, on continue sans session (la synchro se fait
-plus tard : bouton Sync, retour en ligne, `onAuthStateChange`). Et surtout,
-quand des données locales existent, l'app s'affiche **immédiatement** après
-le splash minimal (1,25 s) — la vérification de session tourne en tâche de
-fond, après le rendu, jamais avant. Seul le tout premier lancement sur un
-appareil (aucune donnée locale) attend encore cette vérification, mais avec
-le même délai borné de 4 s au lieu d'une attente potentiellement illimitée.
-
-Testé avec une session Supabase qui ne répond jamais pendant toute la durée
-du test : avant le correctif l'app restait bloquée indéfiniment ; après, elle
-s'affiche à ~1,3 s comme prévu.
+Les présidents sans portée globale restent soumis à la règle existante :
+leurs données de portée ne sont pas affichées hors ligne et doivent être
+rechargées après reconnexion. Lorsqu'aucune donnée locale ni aucun compte
+vérifié hors ligne n'existe, l'écran de connexion reste requis.
 
 ## Sécurité
 

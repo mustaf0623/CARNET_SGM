@@ -60,6 +60,19 @@ async function startApp() {
   render();
 }
 
+function showCachedAccountOffline(localData, account) {
+  state.account = account;
+  if (account.role === 'president' && !account.scopeGlobal) {
+    state.data = emptyData();
+    state.data.profile.name = account.name || '';
+    showToast('Hors ligne : les données de votre portée doivent être rechargées après reconnexion');
+  } else {
+    state.data = localData;
+    showToast('Session indisponible — les données locales restent disponibles');
+  }
+  render();
+}
+
 document.getElementById('syncBtn').addEventListener('click', () => reconcileSync(true));
 
 (async function init() {
@@ -83,7 +96,7 @@ document.getElementById('syncBtn').addEventListener('click', () => reconcileSync
       sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
       sb.auth.onAuthStateChange((event, session) => {
         const newUser = session ? session.user : null;
-        if ((sbUser && !newUser) || (sbUser && newUser && sbUser.id !== newUser.id)) state.account = null;
+        if (state.account && newUser && state.account.id !== newUser.id) state.account = null;
         sbUser = newUser;
       });
       // En cas de perte de réseau au moment précis du chargement, on retente
@@ -117,7 +130,9 @@ document.getElementById('syncBtn').addEventListener('click', () => reconcileSync
       }
       sbUser = await getSupabaseUser();
       if (!sbUser) {
-        renderAuthScreen();
+        const cachedAccount = cachedLastAccountAccess();
+        if (cachedAccount) showCachedAccountOffline(localData, cachedAccount);
+        else renderAuthScreen();
         return;
       }
       await startApp();

@@ -9,6 +9,7 @@ const snapshotMaps = {
 const LOCAL_BACKUP_KEY = 'carnet-data-backup';
 const SYNC_STATE_KEY = 'carnet-sync-state';
 const SYNC_STATE_BACKUP_KEY = 'carnet-sync-state-backup';
+const LAST_AUTH_ACCOUNT_KEY = 'carnet-last-auth-account-id';
 let syncState = { pending: false, snapshots: null };
 
 function accountFromProfile(profile, user) {
@@ -25,7 +26,10 @@ function accountFromProfile(profile, user) {
 }
 function cacheAccountAccess(account) {
   if (!account || !account.role) return;
-  try { localStorage.setItem('carnet-account-access-' + account.id, JSON.stringify(account)); }
+  try {
+    localStorage.setItem('carnet-account-access-' + account.id, JSON.stringify(account));
+    localStorage.setItem(LAST_AUTH_ACCOUNT_KEY, account.id);
+  }
   catch (e) { console.error('Carnet SGM — impossible de mémoriser le rôle pour le mode hors ligne:', e); }
 }
 function cachedAccountAccess(userId) {
@@ -37,8 +41,41 @@ function cachedAccountAccess(userId) {
     return null;
   }
 }
+function cachedLastAccountAccess() {
+  try {
+    const userId = localStorage.getItem(LAST_AUTH_ACCOUNT_KEY);
+    if (userId) {
+      const account = cachedAccountAccess(userId);
+      return account && account.id === userId && ['ca', 'president'].includes(account.role) ? account : null;
+    }
+
+    // Older installs cached roles without recording which account was last active.
+    const prefix = 'carnet-account-access-';
+    const cachedAccounts = [];
+    for (let index = 0; index < localStorage.length; index++) {
+      const key = localStorage.key(index);
+      if (!key || !key.startsWith(prefix)) continue;
+      const accountId = key.slice(prefix.length);
+      const account = cachedAccountAccess(accountId);
+      if (account && account.id === accountId && ['ca', 'president'].includes(account.role)) {
+        cachedAccounts.push(account);
+      }
+    }
+    if (cachedAccounts.length !== 1) return null;
+    localStorage.setItem(LAST_AUTH_ACCOUNT_KEY, cachedAccounts[0].id);
+    return cachedAccounts[0];
+  } catch (e) {
+    console.error('Carnet SGM — impossible de retrouver le compte hors ligne:', e);
+    return null;
+  }
+}
 function clearCachedAccountAccess(userId) {
-  try { localStorage.removeItem('carnet-account-access-' + userId); }
+  try {
+    localStorage.removeItem('carnet-account-access-' + userId);
+    if (localStorage.getItem(LAST_AUTH_ACCOUNT_KEY) === userId) {
+      localStorage.removeItem(LAST_AUTH_ACCOUNT_KEY);
+    }
+  }
   catch (e) { console.error('Carnet SGM — impossible d’effacer le rôle mémorisé:', e); }
 }
 async function fetchCurrentAccount() {
