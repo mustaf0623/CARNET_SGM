@@ -71,7 +71,7 @@ function renderDashboard() {
       <div>
         <div class="eyebrow">Vue d’ensemble</div>
         <h1 class="page-title">Tableau de bord</h1>
-        <p class="page-sub">Comportement des données de présence filtrable par programme et par année.</p>
+        <p class="page-sub">Comportement des données de présence — filtrable par programme et par année.</p>
       </div>
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
         <div class="field">
@@ -86,7 +86,7 @@ function renderDashboard() {
     </div>
     <div class="grid grid-4" style="margin-bottom:18px;">
       ${statCard('Membres', g.total, filter === 'global' ? 'inscrits au total' : 'inscrits à ce programme', 'stat-emerald')}
-      ${statCard('Hommes / Femmes', g.nbH + ' / ' + g.nbF, Math.round((g.nbF/(g.total||1))*100) + '% de femmes', 'stat-gold')}
+      ${statCard('Hommes / Femmes', `<span>${g.nbH}</span><span aria-hidden="true">/</span><span>${g.nbF}</span>`, Math.round((g.nbF/(g.total||1))*100) + '% de femmes', 'stat-gold stat-gender')}
       ${statCard('Taux de présence', g.tauxPresence + '%', yearFilter === 'toutes' ? 'toutes séances confondues' : 'séances de ' + yearFilter, 'stat-emerald')}
       ${statCard('Taux d’absence', g.tauxAbsence + '%', yearFilter === 'toutes' ? 'toutes séances confondues' : 'séances de ' + yearFilter, 'stat-terracotta')}
     </div>
