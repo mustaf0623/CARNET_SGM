@@ -32,9 +32,9 @@ function renderMemberDetailModal() {
             <option value="" ${!m.categorie ? 'selected' : ''}>Non définie</option>
             ${categories.map(category => `<option value="${escapeHtml(category)}" ${category === m.categorie ? 'selected' : ''}>${escapeHtml(category)}</option>`).join('')}
           </select>
-        </div>`}
+        </div>
         <button class="btn btn-primary btn-sm" id="memberDetailCategorySaveBtn" type="button">Enregistrer</button>
-      </div>
+      </div>`}
       <div class="grid grid-4" style="margin:16px 0;gap:10px;">
         ${statCard('Séances', stats.overall.total, 'pointées', 'stat-gold')}
         ${statCard('Présences', stats.overall.present, '', 'stat-emerald')}

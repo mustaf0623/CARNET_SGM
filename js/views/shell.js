@@ -88,6 +88,7 @@ function applyReadOnlyUi() {
     '.member-name-link',
     '#memberDetailCloseBtn',
     '#memberDetailCloseFixedBtn',
+    '#resetMembreFilters',
     '#bureauMemberDetailCloseBtn',
     '#bureauMemberDetailCloseFixedBtn',
   ];
@@ -98,6 +99,8 @@ function applyReadOnlyUi() {
     '#progSelect', '#sessionSelect', '#memberSearch',
     '#dashFilter', '#dashYearFilter', '#reportScope', '#reportSession', '#reportYear',
     '#watchlistProgramme', '#absenceThreshold', '#memberDetailYear', '#membreSearch',
+    '#membreCategoryFilter', '#membreActivityFilter', '#membreTypeFilter',
+    '#membreProgrammeFilter', '#membreSort',
     '#bureauMandatSelect', '#bureauReunionSearch',
     '#supervisionProgramme', '#supervisionYear', '#supervisionLieuA', '#supervisionLieuB',
   ];
