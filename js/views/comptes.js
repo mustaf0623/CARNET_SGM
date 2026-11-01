@@ -17,7 +17,7 @@ function renderComptes() {
           <strong>${escapeHtml(account.email || 'Adresse inconnue')}</strong>
           <div class="card-sub">${self ? 'Votre compte' : 'Compte utilisateur'}</div>
         </div>
-        ${self ? '<span class="pill">Administrateur connecté</span>' : ''}
+        ${self ? '<span class="pill">Administrateur</span>' : ''}
       </div>
       <div class="field"><label>Nom affiché sur les rapports</label><input class="account-name" type="text" value="${escapeHtml(account.name || '')}" ${self ? 'disabled' : ''}></div>
       <div class="account-access-fields">
@@ -69,7 +69,7 @@ async function loadManagedAccounts() {
   if (error) {
     state.accountManagementError = 'Impossible de charger les comptes : ' + error.message;
     state.userAccountsLoaded = true;
-    console.error('Carnet SGM — impossible de charger les comptes:', error);
+    console.error('impossible de charger les comptes:', error);
     render();
     return;
   }
@@ -120,7 +120,7 @@ function attachComptesEvents() {
       await loadManagedAccounts();
     } catch (error) {
       showToast('Impossible de modifier ce compte : ' + error.message);
-      console.error('Carnet SGM — échec de mise à jour des accès:', error);
+      console.error('échec de mise à jour des accès:', error);
       saveButton.disabled = false;
     }
   }));
