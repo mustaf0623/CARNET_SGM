@@ -82,9 +82,7 @@ données, ce sont les **politiques RLS** Supabase (à garder activées sur toute
 Avant de déployer les écrans de rôles, appliquer dans le SQL Editor Supabase la migration de
 rôles fournie séparément à l’administrateur du projet. Elle ajoute les rôles, les portées de
 programme, le profil des nouveaux comptes et les politiques RLS qui interdisent les écritures
-présidentielles côté serveur. Appliquer ensuite `supabase-president-bureau-create.sql` pour
-autoriser uniquement la création de mandats, de postes et d’affectations au Bureau par les
-présidents. Elle remplace les politiques existantes sur les tables utilisées
+présidentielles côté serveur. Elle remplace les politiques existantes sur les tables utilisées
 par l’application : vérifier les politiques personnalisées du projet avant de l’exécuter. Si
 les tables de l’application ne sont pas encore installées, exécuter d’abord `supabase-setup.sql`
 et `bureau-setup.sql`.
