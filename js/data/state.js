@@ -94,18 +94,19 @@ async function loadData() {
   return null;
 }
 async function saveData(options = {}) {
-  if (isPresidentReadOnly()) {
+  const presidentBureauCreation = isPresidentReadOnly() && options.presidentBureauCreation === true;
+  if (isPresidentReadOnly() && !presidentBureauCreation) {
     showToast('Votre compte est en lecture seule');
     return false;
   }
   // Copie synchrone avant toute attente : elle reste disponible même si l'app se ferme maintenant.
   try { localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify(state.data)); } catch (e) { /* stockage indisponible */ }
-  await saveSyncState(true);
+  await saveSyncState(true, presidentBureauCreation || syncState.presidentBureauPending);
   try { localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify(state.data)); } catch (e) { /* stockage indisponible */ }
   try { await idbSet('carnet-data', state.data); }
   catch (e) { showToast('Échec de la sauvegarde locale'); }
   if (sb && sbUser) {
-    if (options.waitForSync) return await pushToSupabase();
+    if (options.waitForSync || presidentBureauCreation) return await pushToSupabase();
     pushToSupabase();
   }
   return true;

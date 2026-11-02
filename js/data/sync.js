@@ -126,8 +126,12 @@ async function loadSyncState() {
   try { const saved = await idbGet(SYNC_STATE_KEY); if (saved) return saved; } catch (e) { /* copie de secours ci-dessous */ }
   try { const backup = localStorage.getItem(SYNC_STATE_BACKUP_KEY); return backup ? JSON.parse(backup) : null; } catch (e) { return null; }
 }
-async function saveSyncState(pending) {
-  syncState = { pending: !!pending, snapshots: serialiseSnapshots() };
+async function saveSyncState(pending, presidentBureauPending = syncState.presidentBureauPending) {
+  syncState = {
+    pending: !!pending,
+    snapshots: serialiseSnapshots(),
+    presidentBureauPending: !!pending && !!presidentBureauPending,
+  };
   try { localStorage.setItem(SYNC_STATE_BACKUP_KEY, JSON.stringify(syncState)); } catch (e) { /* stockage indisponible */ }
   try { await idbSet(SYNC_STATE_KEY, syncState); } catch (e) { /* la copie locale reste disponible */ }
 }
@@ -199,6 +203,52 @@ async function syncTable(tableName, rows, toRemote, prevMap) {
   return currMap;
 }
 
+async function pushPresidentBureauCreates() {
+  const tables = [
+    {
+      key: 'bureauMandats',
+      name: 'bureau_mandats',
+      rows: state.data.bureauMandats,
+      toRemote: m => ({ id: m.id, nom: m.nom, date_debut: m.dateDebut || null, date_fin: m.dateFin || null, actif: !!m.actif }),
+    },
+    {
+      key: 'bureauPostes',
+      name: 'bureau_postes',
+      rows: state.data.bureauPostes,
+      toRemote: p => ({ id: p.id, nom: p.nom }),
+    },
+    {
+      key: 'bureauMembres',
+      name: 'bureau_membres',
+      rows: state.data.bureauMembres,
+      toRemote: m => ({ id: m.id, mandat_id: m.mandatId, membre_id: m.membreId, poste_id: m.posteId }),
+    },
+  ];
+
+  for (const table of tables) {
+    const previous = snapshotMaps[table.key];
+    const current = new Map(table.rows.map(row => [row.id, JSON.stringify(row)]));
+    for (const [id, json] of previous) {
+      if (current.get(id) !== json) {
+        throw new Error('Le compte président peut uniquement ajouter des éléments au Bureau.');
+      }
+    }
+    const additions = table.rows.filter(row => !previous.has(row.id));
+    if (additions.length) {
+      const { error } = await sb.from(table.name).upsert(additions.map(table.toRemote), {
+        onConflict: 'id',
+        ignoreDuplicates: true,
+      });
+      if (error) throw error;
+    }
+    snapshotMaps[table.key] = current;
+    await saveSyncState(true, true);
+  }
+
+  await saveSyncState(false);
+  return true;
+}
+
 let syncing = false;
 let syncQueued = false;
 async function rejectDuplicateAttendance() {
@@ -255,7 +305,23 @@ async function rejectDuplicateAttendance() {
 
 async function pushToSupabase() {
   if (!sb || !sbUser) return false;
-  if (!state.account || state.account.role !== 'ca') return false;
+  if (!state.account) return false;
+  if (state.account.role === 'president') {
+    if (!syncState.presidentBureauPending) return false;
+    if (syncing) { syncQueued = true; return false; }
+    syncing = true;
+    try {
+      return await pushPresidentBureauCreates();
+    } catch (e) {
+      console.error('Carnet SGM — échec de synchronisation des ajouts au Bureau:', e);
+      showToast('Échec de synchronisation : ' + (e && e.message ? e.message : 'erreur inconnue'));
+      return false;
+    } finally {
+      syncing = false;
+      if (syncQueued) { syncQueued = false; pushToSupabase(); }
+    }
+  }
+  if (state.account.role !== 'ca') return false;
   if (syncing) { syncQueued = true; return false; }
   syncing = true;
   try {

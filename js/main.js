@@ -45,7 +45,9 @@ async function startApp() {
         );
         return;
       }
-      if (localData && syncState.pending && account.role === 'ca') {
+      if (localData && syncState.pending && (
+        account.role === 'ca' || (account.role === 'president' && syncState.presidentBureauPending)
+      )) {
         state.data = localData;
         if (!await pushToSupabase()) throw new Error('synchronisation locale impossible');
       }

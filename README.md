@@ -81,7 +81,9 @@ données, ce sont les **politiques RLS** Supabase (à garder activées sur toute
 Avant de déployer les écrans de rôles, appliquer dans le SQL Editor Supabase la migration de
 rôles fournie séparément à l’administrateur du projet. Elle ajoute les rôles, les portées de
 programme, le profil des nouveaux comptes et les politiques RLS qui interdisent les écritures
-présidentielles côté serveur. Elle remplace les politiques existantes sur les tables utilisées
+présidentielles côté serveur. Appliquer ensuite `supabase-president-bureau-create.sql` pour
+autoriser uniquement la création de mandats, de postes et d’affectations au Bureau par les
+présidents. Elle remplace les politiques existantes sur les tables utilisées
 par l’application : vérifier les politiques personnalisées du projet avant de l’exécuter. Si
 les tables de l’application ne sont pas encore installées, exécuter d’abord `supabase-setup.sql`
 et `bureau-setup.sql`.
@@ -92,11 +94,12 @@ premier gestionnaire CA dès que son adresse est confirmée ; il n’y a pas de 
 à lancer séparément. Les administrateurs CA peuvent ensuite gérer les rôles, les gestionnaires
 et les portées dans l’onglet **Comptes**.
 
-Le CA dispose de tous les droits. Le président ne voit que les onglets de consultation autorisés
-(tableau de bord, membres, rapports, supervision et Bureau) ; les écrans de pointage et de gestion
-des comptes, ainsi que les commandes de modification, ne sont pas affichés. Les programmes
-présentés dans les fiches et rapports restent limités à sa portée. Il peut générer un rapport PDF
-signé « Collège des présidents ».
+Le CA dispose de tous les droits. Le président ne voit que les onglets autorisés (tableau de bord,
+membres, rapports, supervision et Bureau) ; les écrans de pointage et de gestion des comptes
+restent masqués. Dans le Bureau, il peut créer des mandats et des postes, puis ajouter des membres ;
+il ne peut pas modifier ou supprimer les éléments existants ni créer des réunions. Pour les réunions,
+il ne peut consulter que les procès-verbaux. Les programmes présentés dans les fiches et rapports
+restent limités à sa portée. Il peut générer un rapport PDF signé « Collège des présidents ».
 Cette page présente les tendances, les taux par catégorie, les fréquences par lieu et des
 comparaisons descriptives programme/lieu ; ces comparaisons ne démontrent pas de causalité.
 

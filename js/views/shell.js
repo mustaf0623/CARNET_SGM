@@ -91,6 +91,9 @@ function applyReadOnlyUi() {
     '#bureauMemberDetailCloseBtn',
     '#bureauMemberDetailCloseFixedBtn',
   ];
+  if (state.tab === 'bureau') {
+    allowedButtons.push('#addMandatBtn', '#addPosteBtn', '#addBureauMembreBtn');
+  }
   document.querySelectorAll('main button').forEach(button => {
     if (!allowedButtons.some(selector => button.matches(selector))) button.hidden = true;
   });
@@ -103,6 +106,12 @@ function applyReadOnlyUi() {
     '#bureauMandatSelect', '#bureauReunionSearch',
     '#supervisionProgramme', '#supervisionYear', '#supervisionLieuA', '#supervisionLieuB',
   ];
+  if (state.tab === 'bureau') {
+    allowedControls.push(
+      '#newMandatName', '#newMandatDebut', '#newMandatFin',
+      '#newPosteName', '#newBureauMembreSelect', '#newBureauPosteSelect',
+    );
+  }
   document.querySelectorAll('main input, main select, main textarea').forEach(control => {
     if (!allowedControls.some(selector => control.matches(selector))) {
       const label = control.closest('label');

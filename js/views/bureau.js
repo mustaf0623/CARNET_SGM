@@ -305,8 +305,12 @@ function attachBureauEvents() {
     const mandat = { id: uid(), nom, dateDebut, dateFin, actif: isFirst };
     d.bureauMandats.push(mandat);
     state.bureauMandatId = mandat.id;
-    await saveData();
-    showToast('Mandat créé'); render();
+    const saved = await saveData({ presidentBureauCreation: true });
+    if (!saved) { render(); return; }
+    showToast(isPresidentReadOnly() && (!sb || !sbUser)
+      ? 'Mandat enregistré localement; synchronisation en attente'
+      : 'Mandat créé');
+    render();
   });
   document.querySelectorAll('.set-active-mandat-btn').forEach(btn => btn.addEventListener('click', async () => {
     d.bureauMandats.forEach(m => { m.actif = m.id === btn.dataset.id; });
@@ -338,7 +342,12 @@ function attachBureauEvents() {
     const nom = document.getElementById('newPosteName').value.trim();
     if (!nom) { showToast('Indiquez un nom de poste'); return; }
     d.bureauPostes.push({ id: uid(), nom });
-    await saveData(); showToast('Poste ajouté'); render();
+    const saved = await saveData({ presidentBureauCreation: true });
+    if (!saved) { render(); return; }
+    showToast(isPresidentReadOnly() && (!sb || !sbUser)
+      ? 'Poste enregistré localement; synchronisation en attente'
+      : 'Poste ajouté');
+    render();
   });
   document.querySelectorAll('.delete-poste-btn').forEach(btn => btn.addEventListener('click', () => {
     openConfirm('Supprimer ce poste ?', 'Les membres qui l’occupaient resteront dans le Bureau mais sans poste assigné.', async () => {
@@ -356,7 +365,12 @@ function attachBureauEvents() {
     const mandat = activeBureauMandat(d);
     if (!mandat) return;
     d.bureauMembres.push({ id: uid(), mandatId: mandat.id, membreId, posteId });
-    await saveData(); showToast('Membre ajouté au Bureau'); render();
+    const saved = await saveData({ presidentBureauCreation: true });
+    if (!saved) { render(); return; }
+    showToast(isPresidentReadOnly() && (!sb || !sbUser)
+      ? 'Membre enregistré localement; synchronisation en attente'
+      : 'Membre ajouté au Bureau');
+    render();
   });
   document.querySelectorAll('.delete-bureau-membre-btn').forEach(btn => btn.addEventListener('click', () => {
     openConfirm('Retirer ce membre du Bureau ?', 'Ses pointages de réunions passées pour ce mandat resteront visibles dans l’historique.', async () => {
