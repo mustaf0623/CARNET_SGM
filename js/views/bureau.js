@@ -113,6 +113,7 @@ function renderBureauMembres(d, mandat) {
 
 function renderBureauReunions(d, mandat) {
   if (!mandat) return emptyRow('Créez d’abord un mandat dans l’onglet « Mandats ».');
+  const readOnly = isPresidentReadOnly();
   const allReunions = d.bureauReunions.filter(r => r.mandatId === mandat.id).sort((a, b) => b.numero - a.numero);
   const q = (state.bureauReunionSearch || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const norm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -126,12 +127,14 @@ function renderBureauReunions(d, mandat) {
   return `
     <div class="card">
       <h3 class="card-title">Réunions — ${escapeHtml(mandat.nom)}</h3>
-      ${!hasMembres ? `<div class="card-sub" style="color:var(--terracotta-dim);">Ajoutez d’abord des membres au Bureau (onglet « Membres du Bureau ») pour pouvoir créer une réunion.</div>` : ''}
-      <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center;">
-        <input type="date" id="newReunionDate" value="${todayISO()}">
-        <button class="btn btn-primary" id="addReunionBtn" ${hasMembres ? '' : 'disabled'}>Nouvelle réunion (n°${nextReunionNumero(d, mandat.id)})</button>
-      </div>
-      <div style="font-size:11px;color:var(--ink-faint);margin-top:6px;">L’ordre du jour et le pointage se renseignent juste après, à l’ouverture de la réunion.</div>
+      ${!hasMembres && !readOnly ? `<div class="card-sub" style="color:var(--terracotta-dim);">Ajoutez d’abord des membres au Bureau (onglet « Membres du Bureau ») pour pouvoir créer une réunion.</div>` : ''}
+      ${readOnly ? '' : `
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;align-items:center;">
+          <input type="date" id="newReunionDate" value="${todayISO()}">
+          <button class="btn btn-primary" id="addReunionBtn" ${hasMembres ? '' : 'disabled'}>Nouvelle réunion (n°${nextReunionNumero(d, mandat.id)})</button>
+        </div>
+        <div style="font-size:11px;color:var(--ink-faint);margin-top:6px;">L’ordre du jour et le pointage se renseignent juste après, à l’ouverture de la réunion.</div>
+      `}
       ${allReunions.length > 5 ? `<div style="margin-top:14px;"><input type="text" id="bureauReunionSearch" placeholder="Rechercher une réunion (numéro, date, ordre du jour...)" value="${escapeHtml(state.bureauReunionSearch || '')}" style="width:100%;"></div>` : ''}
       <div class="ledger" style="margin-top:14px;">
         ${(allReunions.length && !reunions.length) ? emptyRow('Aucune réunion ne correspond à cette recherche.') : reunions.map(r => {
@@ -147,7 +150,7 @@ function renderBureauReunions(d, mandat) {
               <div class="prog-name">Réunion n°${r.numero}${odjPreview ? ' — ' + escapeHtml(odjPreview) : ''}</div>
               <div style="font-size:11.5px;color:var(--ink-faint);">${fmtDate(r.date)}${horaires ? ' · ' + escapeHtml(horaires) : ''}${president ? ' · Présidence : ' + escapeHtml(president.prenom + ' ' + president.nom) : ''} · ${present} présent(s) / ${pts.length + extraPresents} pointé(s)${r.pvTexte || r.pvLien ? ' · PV disponible' : ''}</div>
             </div>
-            <button class="edit-name-btn delete-reunion-btn" data-id="${r.id}" style="color:var(--terracotta);">supprimer</button>
+            ${readOnly ? '' : `<button class="edit-name-btn delete-reunion-btn" data-id="${r.id}" style="color:var(--terracotta);">supprimer</button>`}
           </div>`;
         }).join('') || emptyRow('Aucune réunion pour ce mandat.')}
       </div>
@@ -158,6 +161,18 @@ function renderBureauReunions(d, mandat) {
 function renderBureauReunionDetail(d, mandat) {
   const r = d.bureauReunions.find(x => x.id === state.bureauReunionId);
   if (!r) { state.bureauReunionId = null; return renderBureauReunions(d, mandat); }
+  if (isPresidentReadOnly()) {
+    const pvLien = String(r.pvLien || '').trim();
+    const safePvLien = /^https?:\/\//i.test(pvLien) ? pvLien : '';
+    return `
+      <div class="card">
+        <button class="btn btn-ghost btn-sm" id="backToReunionsBtn">← Retour aux réunions</button>
+        <h3 class="card-title" style="margin-top:12px;">Procès-verbal — Réunion n°${r.numero}</h3>
+        <div style="white-space:pre-wrap;line-height:1.7;">${escapeHtml(r.pvTexte || 'Aucun procès-verbal rédigé pour cette réunion.')}</div>
+        ${safePvLien ? `<div style="margin-top:12px;"><a href="${escapeHtml(safePvLien)}" target="_blank" rel="noopener noreferrer">Ouvrir le procès-verbal joint</a></div>` : ''}
+      </div>
+    `;
+  }
   const membres = bureauMembresForMandat(d, r.mandatId);
   const presidentSeanceMembreId = r.presidentSeanceMembreId || '';
   const pointagesMap = new Map((d.bureauPointages || []).filter(p => p.reunionId === r.id).map(p => [p.membreId, p.statut]));
@@ -352,7 +367,7 @@ function attachBureauEvents() {
 
   // ---- Réunions ----
   const addReunionBtn = document.getElementById('addReunionBtn');
-  if (addReunionBtn) addReunionBtn.addEventListener('click', async () => {
+  if (addReunionBtn && !isPresidentReadOnly()) addReunionBtn.addEventListener('click', async () => {
     const mandat = activeBureauMandat(d);
     if (!mandat) return;
     const date = document.getElementById('newReunionDate').value || todayISO();
@@ -376,7 +391,7 @@ function attachBureauEvents() {
     state.bureauReunionId = row.dataset.openReunion;
     render();
   }));
-  document.querySelectorAll('.delete-reunion-btn').forEach(btn => btn.addEventListener('click', e => {
+  if (!isPresidentReadOnly()) document.querySelectorAll('.delete-reunion-btn').forEach(btn => btn.addEventListener('click', e => {
     e.stopPropagation();
     openConfirm('Supprimer cette réunion ?', 'Le pointage et le procès-verbal associés seront définitivement supprimés.', async () => {
       const id = btn.dataset.id;
