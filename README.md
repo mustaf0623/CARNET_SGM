@@ -62,9 +62,10 @@ protection contre l'enregistrement de deux pointages identiques pour une même s
 
 `getSupabaseUser()` (dans `js/data/sync.js`) borne la vérification de session
 à 4 secondes. Si une session est expirée ou indisponible, l'app utilise les
-données locales et le rôle du dernier compte vérifié au lieu de renvoyer
-l'utilisateur à l'écran de connexion. Les changements restent locaux et
-seront synchronisés quand une session valide sera de nouveau disponible.
+données locales et le rôle du dernier compte vérifié sans attendre la réponse
+réseau. La session et les données distantes sont vérifiées en arrière-plan.
+Les changements restent locaux et seront synchronisés quand une session valide
+sera de nouveau disponible.
 
 Les présidents sans portée globale restent soumis à la règle existante :
 leurs données de portée ne sont pas affichées hors ligne et doivent être

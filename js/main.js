@@ -105,6 +105,7 @@ async function showCachedAccountOffline(localData, account) {
     state.data = emptyData();
     state.data.profile.name = account.name || '';
     showToast('Hors ligne : les données de votre portée doivent être rechargées après reconnexion');
+    render();
     updateSnapshotsFromCurrent();
     await saveSyncState(false);
     try { await idbSet('carnet-data', state.data); }
@@ -114,8 +115,8 @@ async function showCachedAccountOffline(localData, account) {
   } else {
     state.data = localData;
     showToast('Session indisponible — les données locales restent disponibles');
+    render();
   }
-  render();
 }
 
 document.getElementById('syncBtn').addEventListener('click', () => reconcileSync(true));
@@ -150,9 +151,15 @@ document.getElementById('syncBtn').addEventListener('click', () => reconcileSync
         if (!sb) return;
         const newUser = await getSupabaseUser();
         if (newUser && (!sbUser || sbUser.id !== newUser.id)) {
-          state.account = null;
+          const accountChanged = state.account && state.account.id !== newUser.id;
+          if (accountChanged) {
+            clearCachedAccountAccess(state.account.id);
+            await clearLocalDataCache();
+            state.account = null;
+            state.data = null;
+          }
           sbUser = newUser;
-          if (state.data) await startApp();
+          if (state.data || accountChanged) await startApp();
         }
       });
     } catch (e) {
@@ -166,6 +173,28 @@ document.getElementById('syncBtn').addEventListener('click', () => reconcileSync
 
   if (localData) {
     if (supabaseConfigured()) {
+      const cachedAccount = cachedLastAccountAccess();
+      if (cachedAccount) {
+        await showCachedAccountOffline(localData, cachedAccount);
+        if (sb) {
+          getSupabaseUser().then(async user => {
+            if (!user) return;
+            sbUser = user;
+            if (user.id !== cachedAccount.id) {
+              clearCachedAccountAccess(cachedAccount.id);
+              await clearLocalDataCache();
+              state.account = null;
+              state.data = null;
+              await startApp();
+              return;
+            }
+            await reconcileSync();
+          }).catch(e => {
+            console.error('Carnet SGM — impossible de vérifier la session en arrière-plan:', e);
+          });
+        }
+        return;
+      }
       if (!sb) {
         renderAccountAccessScreen(
           'Connexion requise',
@@ -175,12 +204,8 @@ document.getElementById('syncBtn').addEventListener('click', () => reconcileSync
       }
       sbUser = await getSupabaseUser();
       if (!sbUser) {
-        const cachedAccount = cachedLastAccountAccess();
-        if (cachedAccount) await showCachedAccountOffline(localData, cachedAccount);
-        else {
-          await clearLocalDataCache();
-          renderAuthScreen();
-        }
+        await clearLocalDataCache();
+        renderAuthScreen();
         return;
       }
       await startApp();

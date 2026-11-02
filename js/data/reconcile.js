@@ -29,7 +29,11 @@ async function reconcileSync(manual) {
       );
       return;
     }
-    if (account.role === 'ca') await pushToSupabase();
+    if (account.role === 'ca') {
+      await pushToSupabase();
+    } else if (account.role === 'president' && syncState.presidentBureauPending) {
+      if (!await pushToSupabase()) throw new Error('synchronisation des ajouts au Bureau impossible');
+    }
     const remote = await pullFromSupabase();
     state.account = remote.account;
     state.data.programmes = remote.programmes;
