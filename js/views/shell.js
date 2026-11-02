@@ -57,7 +57,6 @@ function render() {
       </div>
     </aside>
     <main>
-      ${isPresidentReadOnly() ? '<div class="card-sub" style="padding:10px 14px;border:1px solid var(--line);border-radius:var(--radius-sm);margin-bottom:16px;">Mode consultation — vous pouvez consulter les données et générer les rapports autorisés.</div>' : ''}
       <div class="view" id="view">${renderTab()}</div>
     </main>
   `;
