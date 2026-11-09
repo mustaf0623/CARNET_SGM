@@ -98,21 +98,10 @@ function buildProcesVerbalPdf(r, mandat, membresAssoc, d) {
   let y = 44;
   doc.setTextColor(...ink);
   if (r.lieu) {
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5);
     const locationLines = doc.splitTextToSize(`Lieu : ${r.lieu}`, contentW);
     doc.text(locationLines, margin, y);
     y += locationLines.length * 5 + 2;
-  }
-  if (r.ordreDuJour) {
-    doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text('Ordre du jour', margin, y); y += 6;
-    doc.setFont('helvetica', 'normal'); doc.setFontSize(10.5);
-    const odjPoints = r.ordreDuJour.split('\n').map(l => l.trim()).filter(Boolean);
-    odjPoints.forEach(point => {
-      const wrapped = doc.splitTextToSize('•  ' + point, contentW);
-      doc.text(wrapped, margin, y);
-      y += wrapped.length * 5.4 + 1.2;
-    });
-    y += 6.5;
   }
 
   // Liste de présence
@@ -123,15 +112,28 @@ function buildProcesVerbalPdf(r, mandat, membresAssoc, d) {
   const absents = membresAssoc.filter(bm => pointagesMap.get(bm.membreId) === 'absent').map(bm => `${bm.membre.prenom} ${bm.membre.nom}${bm.poste ? ' (' + bm.poste.nom + ')' : ''}`);
   const extraPresents = (d.bureauPresenceExtras || []).filter(x => x.reunionId === r.id && x.statut === 'present').map(x => `${x.name}${x.poste ? ' (' + x.poste + ')' : ''}`);
   doc.setTextColor(...ink);
-  const presLines = doc.splitTextToSize(`Membres du Bureau présents (${presents.length}) : ${presents.length ? presents.join(', ') + ' ont été présents.' : '—'}`, contentW);
+  const presLines = doc.splitTextToSize(`Membres du Bureau : ${presents.join(', ') || '—'}`, contentW);
   doc.text(presLines, margin, y); y += presLines.length * 5 + 3;
   if (extraPresents.length) {
-    const guestLines = doc.splitTextToSize(`Invités présents (${extraPresents.length}) : ${extraPresents.join(', ')} ont été présents.`, contentW);
+    const guestLines = doc.splitTextToSize(`Invités : ${extraPresents.join(', ')}`, contentW);
     doc.text(guestLines, margin, y); y += guestLines.length * 5 + 3;
   }
   doc.setTextColor(...faint);
-  const absLines = doc.splitTextToSize(`Absents (${absents.length}) : ${absents.join(', ') || '—'}`, contentW);
+  const absLines = doc.splitTextToSize(`Absents : ${absents.join(', ') || '—'}`, contentW);
   doc.text(absLines, margin, y); y += absLines.length * 5 + 10;
+
+  if (r.ordreDuJour) {
+    doc.setTextColor(...ink);
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text('Ordre du jour', margin, y); y += 6;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(10.5);
+    const odjPoints = r.ordreDuJour.split('\n').map(l => l.trim()).filter(Boolean);
+    odjPoints.forEach(point => {
+      const wrapped = doc.splitTextToSize('•  ' + point, contentW);
+      doc.text(wrapped, margin, y);
+      y += wrapped.length * 5.4 + 1.2;
+    });
+    y += 6.5;
+  }
 
   // Corps du procès-verbal
   doc.setTextColor(...ink);
