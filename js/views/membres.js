@@ -21,12 +21,6 @@ function filterMembreDirectory(members, programmes) {
       || String(member.categorie || '').trim()
       || 'Non définie';
     const status = memberActivityStatus(member);
-    if (state.membreCategoryFilter !== 'toutes' && category !== state.membreCategoryFilter) return false;
-    if (state.membreActivityFilter !== 'toutes' && status !== state.membreActivityFilter) return false;
-    if (state.membreTypeFilter === 'permanent' && member.ap) return false;
-    if (state.membreTypeFilter === 'ap' && !member.ap) return false;
-    if (state.membreProgrammeFilter !== 'tous'
-      && !memberInProgramme(member, state.membreProgrammeFilter)) return false;
     const programmeNames = member.ap || member.allProgrammes
       ? 'Tous les programmes'
       : (member.programmeIds || []).map(id => (programmes.find(programme => programme.id === id) || {}).nom).filter(Boolean).join(' ');
@@ -56,6 +50,29 @@ function filterMembreDirectory(members, programmes) {
   });
 }
 
+// Compte + tableau de l'annuaire filtré — factorisé pour être réutilisé à la
+// fois au rendu initial et lors d'un rafraîchissement léger (sans tout
+// reconstruire la page, pour ne pas perdre l'état des cases à cocher).
+function renderDirectoryMembersBlock(filteredDirectoryMembers, directoryMembers, allowedProgrammes, readOnly) {
+  const countLine = `<div class="card-sub">${filteredDirectoryMembers.length} membre(s) affiché(s) sur ${directoryMembers.length} de la portée${directoryMembers.some(m => m.ap) ? ' · ' + directoryMembers.filter(m => m.ap).length + ' membre(s) ponctuel(s) (AP)' : ''}</div>`;
+  const activityLabels = { actif: 'Actif', moyen: 'Moyen', pasDuTout: 'Pas du tout', nonRenseigne: 'Non renseigné' };
+  let table;
+  if (!directoryMembers.length) table = emptyRow('Aucun membre dans cette portée autorisée.');
+  else if (!filteredDirectoryMembers.length) table = emptyRow('Aucun membre ne correspond à ces critères.');
+  else table = `<div class="table-wrap"><table class="data-table"><thead><tr><th>Nom</th><th>Sexe</th><th>Catégorie</th><th>Activité</th><th>Programmes</th>${readOnly ? '' : '<th></th>'}</tr></thead><tbody>
+        ${filteredDirectoryMembers.map(m => {
+          const memberProgrammes = allowedProgrammes.filter(programme =>
+            m.ap || m.allProgrammes || (m.programmeIds || []).includes(programme.id)
+          );
+          const programmeLabels = m.ap || m.allProgrammes
+            ? `<span class="pill">${readOnly && !state.account.scopeGlobal ? 'Tous les programmes autorisés' : 'Tous les programmes'}</span>`
+            : memberProgrammes.map(programme => `<span class="pill">${escapeHtml(programme.nom)}</span>`).join('');
+          return `<tr><td><button type="button" class="member-name-link" data-id="${m.id}" style="background:none;border:none;padding:0;color:var(--ink);font-weight:700;cursor:pointer;text-decoration:underline;text-decoration-color:var(--line-strong);">${escapeHtml(m.prenom)} ${escapeHtml(m.nom)}</button>${m.ap ? ` <span class="pill" style="background:var(--gold-tint);border-color:var(--gold);color:var(--gold);">AP</span>` : ''}${m.extra && Object.keys(m.extra).length ? ` <span class="pill" style="background:var(--gold-tint);border-color:var(--gold);color:var(--gold);font-size:10px;" title="Informations importées disponibles">i</span>` : ''}</td><td>${m.sexe === 'H' ? 'Homme' : 'Femme'}</td><td>${escapeHtml(normaliseCategorie(m.categorie) || m.categorie || 'Non définie')}</td><td>${activityLabels[memberActivityStatus(m)]}</td><td>${programmeLabels || '—'}</td>${readOnly ? '' : `<td><button class="edit-name-btn delete-membre-btn" data-id="${m.id}" style="color:var(--terracotta);">supprimer</button></td>`}</tr>`;
+        }).join('')}
+      </tbody></table></div>`;
+  return countLine + table;
+}
+
 function renderMembres() {
   const d = state.data;
   const readOnly = isPresidentReadOnly();
@@ -67,11 +84,6 @@ function renderMembres() {
   const directoryCategories = Array.from(new Set(directoryMembers.map(member =>
     normaliseCategorie(member.categorie) || String(member.categorie || '').trim() || 'Non définie'
   ))).sort((a, b) => a.localeCompare(b, 'fr'));
-  if (!directoryCategories.includes(state.membreCategoryFilter)) state.membreCategoryFilter = 'toutes';
-  if (state.membreProgrammeFilter !== 'tous'
-    && !allowedProgrammes.some(programme => programme.id === state.membreProgrammeFilter)) {
-    state.membreProgrammeFilter = 'tous';
-  }
   const filteredDirectoryMembers = filterMembreDirectory(directoryMembers, allowedProgrammes);
   return `
     <div class="page-head">
@@ -160,63 +172,74 @@ function renderMembres() {
 
     <div class="card" style="margin-top:16px;">
       <h3 class="card-title">${readOnly ? 'Membres de la portée autorisée' : 'Tous les membres'}</h3>
-      <div class="card-sub">${filteredDirectoryMembers.length} membre(s) affiché(s) sur ${directoryMembers.length} de la portée${directoryMembers.some(m => m.ap) ? ' · ' + directoryMembers.filter(m => m.ap).length + ' membre(s) ponctuel(s) (AP)' : ''}</div>
+      <div class="card-sub">Combinez la recherche et plusieurs critères à la fois (par ex. deux catégories ET un programme ET un statut) pour une recherche croisée.</div>
       <div class="grid grid-2" style="margin:12px 0 14px;gap:10px;">
         <div class="field" style="grid-column:1/-1;">
           <label for="membreSearch">Recherche (noms, programmes et informations complémentaires)</label>
           <input type="search" id="membreSearch" placeholder="Ex. prénom nom, catégorie, statut ou valeur importée" value="${escapeHtml(state.membreSearch || '')}" style="width:100%;">
         </div>
-        <div class="field"><label for="membreCategoryFilter">Catégorie</label>
-          <select id="membreCategoryFilter"><option value="toutes">Toutes les catégories</option>${directoryCategories.map(category => `<option value="${escapeHtml(category)}" ${state.membreCategoryFilter === category ? 'selected' : ''}>${escapeHtml(category)}</option>`).join('')}</select>
-        </div>
-        <div class="field"><label for="membreActivityFilter">Statut d’activité</label>
-          <select id="membreActivityFilter">
-            <option value="toutes" ${state.membreActivityFilter === 'toutes' ? 'selected' : ''}>Tous les statuts</option>
-            <option value="actif" ${state.membreActivityFilter === 'actif' ? 'selected' : ''}>Actif</option>
-            <option value="moyen" ${state.membreActivityFilter === 'moyen' ? 'selected' : ''}>Moyen</option>
-            <option value="pasDuTout" ${state.membreActivityFilter === 'pasDuTout' ? 'selected' : ''}>Pas du tout</option>
-            <option value="nonRenseigne" ${state.membreActivityFilter === 'nonRenseigne' ? 'selected' : ''}>Non renseigné</option>
-          </select>
-        </div>
-        <div class="field"><label for="membreTypeFilter">Type de membre</label>
-          <select id="membreTypeFilter">
-            <option value="tous" ${state.membreTypeFilter === 'tous' ? 'selected' : ''}>Tous les types</option>
-            <option value="permanent" ${state.membreTypeFilter === 'permanent' ? 'selected' : ''}>Permanent</option>
-            <option value="ap" ${state.membreTypeFilter === 'ap' ? 'selected' : ''}>Ponctuel (AP)</option>
-          </select>
-        </div>
-        <div class="field"><label for="membreProgrammeFilter">Programme</label>
-          <select id="membreProgrammeFilter"><option value="tous">${readOnly ? 'Tous les programmes autorisés' : 'Tous les programmes'}</option>${allowedProgrammes.map(programme => `<option value="${programme.id}" ${state.membreProgrammeFilter === programme.id ? 'selected' : ''}>${escapeHtml(programme.nom)}</option>`).join('')}</select>
-        </div>
-        <div class="field"><label for="membreSort">Trier par</label>
+        <div class="field">
+          <label for="membreSort">Trier par</label>
           <select id="membreSort">
             <option value="nom" ${state.membreSort === 'nom' ? 'selected' : ''}>Nom puis prénom</option>
             <option value="categorie" ${state.membreSort === 'categorie' ? 'selected' : ''}>Catégorie puis nom</option>
-            <option value="activite" ${state.membreSort === 'activite' ? 'selected' : ''}>Statut d’activité puis nom</option>
+            <option value="activite" ${state.membreSort === 'activite' ? 'selected' : ''}>Statut d'activité puis nom</option>
           </select>
         </div>
         <div style="display:flex;align-items:end;"><button type="button" class="btn btn-ghost btn-sm" id="resetMembreFilters">Effacer les filtres</button></div>
       </div>
-      ${(() => {
-        if (!directoryMembers.length) return emptyRow('Aucun membre dans cette portée autorisée.');
-        if (!filteredDirectoryMembers.length) return emptyRow('Aucun membre ne correspond à ces critères.');
-        return `<div class="table-wrap"><table class="data-table"><thead><tr><th>Nom</th><th>Sexe</th><th>Catégorie</th><th>Activité</th><th>Programmes</th>${readOnly ? '' : '<th></th>'}</tr></thead><tbody>
-        ${filteredDirectoryMembers.map(m => {
-          const memberProgrammes = allowedProgrammes.filter(programme =>
-            m.ap || m.allProgrammes || (m.programmeIds || []).includes(programme.id)
-          );
-          const programmeLabels = m.ap || m.allProgrammes
-            ? `<span class="pill">${readOnly && !state.account.scopeGlobal ? 'Tous les programmes autorisés' : 'Tous les programmes'}</span>`
-            : memberProgrammes.map(programme => `<span class="pill">${escapeHtml(programme.nom)}</span>`).join('');
-          const activityLabels = { actif: 'Actif', moyen: 'Moyen', pasDuTout: 'Pas du tout', nonRenseigne: 'Non renseigné' };
-          return `<tr><td><button type="button" class="member-name-link" data-id="${m.id}" style="background:none;border:none;padding:0;color:var(--ink);font-weight:700;cursor:pointer;text-decoration:underline;text-decoration-color:var(--line-strong);">${escapeHtml(m.prenom)} ${escapeHtml(m.nom)}</button>${m.ap ? ` <span class="pill" style="background:var(--gold-tint);border-color:var(--gold);color:var(--gold);">AP</span>` : ''}${m.extra && Object.keys(m.extra).length ? ` <span class="pill" style="background:var(--gold-tint);border-color:var(--gold);color:var(--gold);font-size:10px;" title="Informations importées disponibles">i</span>` : ''}</td><td>${m.sexe === 'H' ? 'Homme' : 'Femme'}</td><td>${escapeHtml(normaliseCategorie(m.categorie) || m.categorie || 'Non définie')}</td><td>${activityLabels[memberActivityStatus(m)]}</td><td>${programmeLabels || '—'}</td>${readOnly ? '' : `<td><button class="edit-name-btn delete-membre-btn" data-id="${m.id}" style="color:var(--terracotta);">supprimer</button></td>`}</tr>`;
-        }).join('')}
-      </tbody></table></div>`;
-      })()}
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;">
+        <div style="border:1px solid var(--line);border-radius:10px;padding:9px 12px;">
+          <div style="font-size:12.5px;font-weight:700;margin-bottom:7px;">Catégorie</div>
+          <div style="display:flex;gap:8px;margin-bottom:8px;">
+            <button type="button" class="btn btn-ghost btn-sm" data-dir-check-group="membreCatFilterCb" data-dir-check-action="all">Tout</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-dir-check-group="membreCatFilterCb" data-dir-check-action="none">Aucun</button>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:12px;font-size:12px;">
+            ${directoryCategories.map(category => `<label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" class="membreCatFilterCb" value="${escapeHtml(category)}" checked>${escapeHtml(category)}</label>`).join('') || '<span style="color:var(--ink-faint);">Aucune catégorie pour l\u2019instant.</span>'}
+          </div>
+        </div>
+        <div style="border:1px solid var(--line);border-radius:10px;padding:9px 12px;">
+          <div style="font-size:12.5px;font-weight:700;margin-bottom:7px;">Type</div>
+          <div style="display:flex;gap:8px;margin-bottom:8px;">
+            <button type="button" class="btn btn-ghost btn-sm" data-dir-check-group="membreTypeFilterCb" data-dir-check-action="all">Tout</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-dir-check-group="membreTypeFilterCb" data-dir-check-action="none">Aucun</button>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:12px;font-size:12px;">
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" class="membreTypeFilterCb" value="permanent" checked>Permanent</label>
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" class="membreTypeFilterCb" value="ap" checked>Ponctuel (AP)</label>
+          </div>
+        </div>
+        <div style="border:1px solid var(--line);border-radius:10px;padding:9px 12px;">
+          <div style="font-size:12.5px;font-weight:700;margin-bottom:7px;">Statut d'activité</div>
+          <div style="display:flex;gap:8px;margin-bottom:8px;">
+            <button type="button" class="btn btn-ghost btn-sm" data-dir-check-group="membreActivityFilterCb" data-dir-check-action="all">Tout</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-dir-check-group="membreActivityFilterCb" data-dir-check-action="none">Aucun</button>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:12px;font-size:12px;">
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" class="membreActivityFilterCb" value="actif" checked>Actif</label>
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" class="membreActivityFilterCb" value="moyen" checked>Moyen</label>
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" class="membreActivityFilterCb" value="pasDuTout" checked>Pas du tout</label>
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" class="membreActivityFilterCb" value="nonRenseigne" checked>Non renseigné</label>
+          </div>
+        </div>
+        <div style="border:1px solid var(--line);border-radius:10px;padding:9px 12px;">
+          <div style="font-size:12.5px;font-weight:700;margin-bottom:7px;">Programme</div>
+          <div style="display:flex;gap:8px;margin-bottom:8px;">
+            <button type="button" class="btn btn-ghost btn-sm" data-dir-check-group="membreProgFilterCb" data-dir-check-action="all">Tout</button>
+            <button type="button" class="btn btn-ghost btn-sm" data-dir-check-group="membreProgFilterCb" data-dir-check-action="none">Aucun</button>
+          </div>
+          <div style="display:flex;flex-wrap:wrap;gap:12px;font-size:12px;">
+            ${allowedProgrammes.map(programme => `<label style="display:flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" class="membreProgFilterCb" value="${programme.id}" checked>${escapeHtml(programme.nom)}</label>`).join('') || '<span style="color:var(--ink-faint);">Aucun programme pour l\u2019instant.</span>'}
+          </div>
+        </div>
+      </div>
+      <div id="membreDirectoryResults">${renderDirectoryMembersBlock(filteredDirectoryMembers, directoryMembers, allowedProgrammes, readOnly)}</div>
     </div>
 
     ${readOnly ? '' : `<div class="card" style="margin-top:16px;">
       <h3 class="card-title">Exporter la base</h3>
+
       <div class="card-sub">Combinez la recherche et les filtres, choisissez les colonnes, puis exportez les membres correspondants.</div>
 
       <div class="field" style="margin-top:14px;">
@@ -322,42 +345,91 @@ function renderMembres() {
 
 function attachMembresEvents() {
   const d = state.data;
+  const readOnly = isPresidentReadOnly();
+  const allowedProgrammes = d.programmes.filter(programme => accountCanReadProgramme(programme.id));
+  const directoryMembers = membersInMembreScope(d.membres, readOnly, state.account, allowedProgrammes);
+
+  // Recherche croisée (plusieurs catégories/types/statuts/programmes à la fois) :
+  // les cases cochées sont lues directement dans le DOM à chaque filtrage, et
+  // seul le bloc résultats (#membreDirectoryResults) est remplacé — jamais la
+  // page entière — pour ne jamais perdre une sélection de cases en cours de
+  // frappe ou de clic (contrairement à render(), qui reconstruit tout depuis
+  // state et remettrait chaque case à son état coché par défaut).
+  function getFilteredDirectoryMembers() {
+    const catChecked = Array.from(document.querySelectorAll('.membreCatFilterCb:checked')).map(cb => cb.value);
+    const typeChecked = Array.from(document.querySelectorAll('.membreTypeFilterCb:checked')).map(cb => cb.value);
+    const activityChecked = Array.from(document.querySelectorAll('.membreActivityFilterCb:checked')).map(cb => cb.value);
+    const progChecked = Array.from(document.querySelectorAll('.membreProgFilterCb:checked')).map(cb => cb.value);
+    const base = directoryMembers.filter(member => {
+      const category = normaliseCategorie(member.categorie) || String(member.categorie || '').trim() || 'Non définie';
+      if (!catChecked.includes(category)) return false;
+      if (!typeChecked.includes(member.ap ? 'ap' : 'permanent')) return false;
+      if (!activityChecked.includes(memberActivityStatus(member))) return false;
+      if (!progChecked.some(pid => memberInProgramme(member, pid))) return false;
+      return true;
+    });
+    return filterMembreDirectory(base, allowedProgrammes);
+  }
+
+  function refreshDirectoryResults() {
+    const container = document.getElementById('membreDirectoryResults');
+    if (!container) return;
+    const filtered = getFilteredDirectoryMembers();
+    container.innerHTML = renderDirectoryMembersBlock(filtered, directoryMembers, allowedProgrammes, readOnly);
+    attachDirectoryResultHandlers();
+  }
+
+  function attachDirectoryResultHandlers() {
+    document.querySelectorAll('#membreDirectoryResults .member-name-link').forEach(btn => btn.addEventListener('click', () => {
+      state.memberDetailId = btn.dataset.id;
+      render();
+    }));
+    document.querySelectorAll('#membreDirectoryResults .delete-membre-btn').forEach(btn => btn.addEventListener('click', () => {
+      const m = d.membres.find(m => m.id === btn.dataset.id);
+      openConfirm(
+        'Supprimer ce membre ?',
+        (m ? m.prenom + ' ' + m.nom : 'Ce membre') + ' sera retiré, avec tout son historique de pointage.',
+        async () => {
+          d.pointages = d.pointages.filter(p => p.membreId !== btn.dataset.id);
+          d.membres = d.membres.filter(m => m.id !== btn.dataset.id);
+          await saveData(); showToast('Membre supprimé'); render();
+        }
+      );
+    }));
+  }
+
   const membreSearch = document.getElementById('membreSearch');
   if (membreSearch) membreSearch.addEventListener('input', e => {
     state.membreSearch = e.target.value;
-    const pos = e.target.selectionStart;
-    render();
-    const again = document.getElementById('membreSearch');
-    if (again) { again.focus(); again.setSelectionRange(pos, pos); }
+    refreshDirectoryResults();
   });
-  const directoryFilters = {
-    membreCategoryFilter: 'membreCategoryFilter',
-    membreActivityFilter: 'membreActivityFilter',
-    membreTypeFilter: 'membreTypeFilter',
-    membreProgrammeFilter: 'membreProgrammeFilter',
-    membreSort: 'membreSort',
-  };
-  Object.entries(directoryFilters).forEach(([stateKey, elementId]) => {
-    const select = document.getElementById(elementId);
-    if (select) select.addEventListener('change', event => {
-      state[stateKey] = event.target.value;
-      render();
-    });
+  const membreSortSelect = document.getElementById('membreSort');
+  if (membreSortSelect) membreSortSelect.addEventListener('change', e => {
+    state.membreSort = e.target.value;
+    refreshDirectoryResults();
   });
+  document.querySelectorAll('.membreCatFilterCb, .membreTypeFilterCb, .membreActivityFilterCb, .membreProgFilterCb')
+    .forEach(checkbox => checkbox.addEventListener('change', refreshDirectoryResults));
+  document.querySelectorAll('[data-dir-check-group]').forEach(button => button.addEventListener('click', () => {
+    const selectAll = button.dataset.dirCheckAction === 'all';
+    document.querySelectorAll(`.${button.dataset.dirCheckGroup}`).forEach(checkbox => { checkbox.checked = selectAll; });
+    refreshDirectoryResults();
+  }));
   const resetDirectoryFilters = document.getElementById('resetMembreFilters');
   if (resetDirectoryFilters) resetDirectoryFilters.addEventListener('click', () => {
     state.membreSearch = '';
-    state.membreCategoryFilter = 'toutes';
-    state.membreActivityFilter = 'toutes';
-    state.membreTypeFilter = 'tous';
-    state.membreProgrammeFilter = 'tous';
     state.membreSort = 'nom';
-    render();
+    if (membreSearch) membreSearch.value = '';
+    if (membreSortSelect) membreSortSelect.value = 'nom';
+    document.querySelectorAll('.membreCatFilterCb, .membreTypeFilterCb, .membreActivityFilterCb, .membreProgFilterCb')
+      .forEach(checkbox => { checkbox.checked = true; });
+    refreshDirectoryResults();
   });
+  attachDirectoryResultHandlers();
 
-  // "Tous les programmes" et la sélection individuelle sont mutuellement
-  // exclusifs : cocher "tous" désactive/décoche le détail, et cocher un
-  // programme précis décoche "tous" pour permettre la sélection.
+  // \"Tous les programmes\" et la sélection individuelle sont mutuellement
+  // exclusifs : cocher \"tous\" désactive/décoche le détail, et cocher un
+  // programme précis décoche \"tous\" pour permettre la sélection.
   const progAllCb = document.getElementById('exportProgAll');
   const progOneCbs = () => Array.from(document.querySelectorAll('.exportProgOne input.exportProgFilter'));
   const setProgrammeFilters = (enabled, clearSelection = false) => {
@@ -588,24 +660,6 @@ function attachMembresEvents() {
         d.membres.forEach(m => { m.programmeIds = m.programmeIds.filter(pid => pid !== btn.dataset.id); });
         d.programmes = d.programmes.filter(p => p.id !== btn.dataset.id);
         await saveData(); showToast('Programme supprimé'); render();
-      }
-    );
-  }));
-
-  document.querySelectorAll('.member-name-link').forEach(btn => btn.addEventListener('click', () => {
-    state.memberDetailId = btn.dataset.id;
-    render();
-  }));
-
-  document.querySelectorAll('.delete-membre-btn').forEach(btn => btn.addEventListener('click', () => {
-    const m = d.membres.find(m => m.id === btn.dataset.id);
-    openConfirm(
-      'Supprimer ce membre ?',
-      (m ? m.prenom + ' ' + m.nom : 'Ce membre') + ' sera retiré, avec tout son historique de pointage.',
-      async () => {
-        d.pointages = d.pointages.filter(p => p.membreId !== btn.dataset.id);
-        d.membres = d.membres.filter(m => m.id !== btn.dataset.id);
-        await saveData(); showToast('Membre supprimé'); render();
       }
     );
   }));

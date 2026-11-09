@@ -88,6 +88,7 @@ function applyReadOnlyUi() {
     '#memberDetailCloseBtn',
     '#memberDetailCloseFixedBtn',
     '#resetMembreFilters',
+    '[data-dir-check-group]',
     '#bureauMemberDetailCloseBtn',
     '#bureauMemberDetailCloseFixedBtn',
   ];
@@ -100,9 +101,8 @@ function applyReadOnlyUi() {
   const allowedControls = [
     '#progSelect', '#sessionSelect', '#memberSearch',
     '#dashFilter', '#dashYearFilter', '#reportScope', '#reportSession', '#reportYear',
-    '#watchlistProgramme', '#absenceThreshold', '#memberDetailYear', '#membreSearch',
-    '#membreCategoryFilter', '#membreActivityFilter', '#membreTypeFilter',
-    '#membreProgrammeFilter', '#membreSort',
+    '#watchlistProgramme', '#absenceThreshold', '#memberDetailYear', '#membreSearch', '#membreSort',
+    '.membreCatFilterCb', '.membreTypeFilterCb', '.membreActivityFilterCb', '.membreProgFilterCb',
     '#bureauMandatSelect', '#bureauReunionSearch',
     '#supervisionProgramme', '#supervisionYear', '#supervisionLieuA', '#supervisionLieuB',
   ];
