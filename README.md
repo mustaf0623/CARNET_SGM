@@ -57,6 +57,8 @@ prise dès qu'on est en ligne, avec repli sur le cache hors-ligne.
 Après une modification du schéma Supabase, réexécuter `supabase-setup.sql` dans le SQL Editor
 du projet avant de déployer l'application. Le script est rejouable et ajoute notamment la
 protection contre l'enregistrement de deux pointages identiques pour une même séance.
+Pour le module Bureau, réexécuter également `bureau-setup.sql` afin d'ajouter les colonnes
+utilisées pour les réunions et les procès-verbaux.
 
 ## Continuité hors-ligne et expiration de session
 

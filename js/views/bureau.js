@@ -164,6 +164,9 @@ function renderBureauReunionDetail(d, mandat) {
   if (isPresidentReadOnly()) {
     const pvLien = String(r.pvLien || '').trim();
     const safePvLien = /^https?:\/\//i.test(pvLien) ? pvLien : '';
+    const president = (d.membres || []).find(m => m.id === r.presidentSeanceMembreId);
+    const presidentName = president ? `${president.prenom} ${president.nom}`.trim() : '—';
+    const secretaryName = bureauSecretaryName(d, r);
     return `
       <div class="card">
         <button class="btn btn-ghost btn-sm" id="backToReunionsBtn">← Retour aux réunions</button>
@@ -171,6 +174,10 @@ function renderBureauReunionDetail(d, mandat) {
         <div class="card-sub">${fmtDate(r.date)}${r.lieu ? ' · Lieu : ' + escapeHtml(r.lieu) : ''}</div>
         <div style="white-space:pre-wrap;line-height:1.7;">${escapeHtml(r.pvTexte || 'Aucun procès-verbal rédigé pour cette réunion.')}</div>
         ${safePvLien ? `<div style="margin-top:12px;"><a href="${escapeHtml(safePvLien)}" target="_blank" rel="noopener noreferrer">Ouvrir le procès-verbal joint</a></div>` : ''}
+        <div style="display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:28px;padding-top:12px;border-top:1px solid var(--line);font-size:12px;">
+          <div>Secrétaire de séance : <strong>${escapeHtml(secretaryName)}</strong></div>
+          <div>Président de séance : <strong>${escapeHtml(presidentName)}</strong></div>
+        </div>
       </div>
     `;
   }
@@ -526,6 +533,8 @@ function attachBureauEvents() {
     if (!r) return;
     r.pvTexte = pvTextarea ? pvTextarea.value : '';
     r.pvLien = document.getElementById('reunionPvLien').value.trim();
+    const secretaryName = String(d.profile?.name || '').trim();
+    if (secretaryName) r.secretaireSeance = secretaryName;
     await saveData(); showToast('Procès-verbal enregistré'); render();
   });
 

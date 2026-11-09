@@ -187,6 +187,7 @@ async function pullFromSupabase() {
     lieu: r.lieu || '',
     heureDebut: r.heure_debut || '', heureFin: r.heure_fin || '',
     presidentSeanceMembreId: r.president_seance_membre_id || '',
+    secretaireSeance: r.secretaire_seance || '',
   }));
   const bureauPointages = (bPointageRes.data || []).map(r => ({ id: r.id, reunionId: r.reunion_id, membreId: r.membre_id, statut: r.statut }));
   const bureauPresenceExtras = (bExtraRes.data || []).map(r => ({ id: r.id, reunionId: r.reunion_id, name: r.name, poste: r.poste || '', statut: r.statut || 'present' }));
@@ -344,6 +345,7 @@ async function pushToSupabase() {
       lieu: r.lieu || '',
       heure_debut: r.heureDebut || null, heure_fin: r.heureFin || null,
       president_seance_membre_id: r.presidentSeanceMembreId || null,
+      secretaire_seance: r.secretaireSeance || '',
     }), snapshotMaps.bureauReunions);
     snapshotMaps.bureauPointages = await syncTable('bureau_pointages', state.data.bureauPointages, p => ({ id: p.id, reunion_id: p.reunionId, membre_id: p.membreId, statut: p.statut }), snapshotMaps.bureauPointages);
     snapshotMaps.bureauPresenceExtras = await syncTable('bureau_presence_extras', state.data.bureauPresenceExtras || [], x => ({ id: x.id, reunion_id: x.reunionId, name: x.name, poste: x.poste || '', statut: x.statut || 'present' }), snapshotMaps.bureauPresenceExtras);

@@ -157,7 +157,7 @@ function buildProcesVerbalPdf(r, mandat, membresAssoc, d) {
   const footY = pageH - 12;
   const president = (d.membres || []).find(m => m.id === r.presidentSeanceMembreId);
   const presidentName = president ? `${president.prenom} ${president.nom}`.trim() : '—';
-  const secretaryName = state.data.profile.name || '—';
+  const secretaryName = bureauSecretaryName(d, r);
   doc.setDrawColor(214, 219, 204); doc.line(margin, footY - 20, pageW - margin, footY - 20);
   doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(...ink);
   doc.text(`Secrétaire de séance : ${secretaryName}`, margin, footY - 14);

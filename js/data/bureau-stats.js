@@ -15,6 +15,14 @@ function bureauMembresForMandat(d, mandatId) {
     poste: d.bureauPostes.find(p => p.id === bm.posteId),
   })).filter(x => x.membre);
 }
+function bureauSecretaryName(d, reunion) {
+  const savedName = String(reunion.secretaireSeance || '').trim();
+  if (savedName) return savedName;
+  const secretary = bureauMembresForMandat(d, reunion.mandatId)
+    .find(item => /secrétaire/i.test(item.poste?.nom || ''));
+  if (secretary) return `${secretary.membre.prenom} ${secretary.membre.nom}`.trim();
+  return !isPresidentReadOnly() ? String(d.profile?.name || '').trim() || '—' : '—';
+}
 function bureauExtraPresencesForReunion(d, reunionId) {
   return (d.bureauPresenceExtras || []).filter(x => x.reunionId === reunionId);
 }
