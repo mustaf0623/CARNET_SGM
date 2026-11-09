@@ -51,14 +51,20 @@ function buildReportDoc(scope, yearFilter, sessionId) {
   if (session) {
     const programme = d.programmes.find(p => p.id === session.programmeId);
     const pointagesSession = d.pointages.filter(p => p.sessionId === session.id);
-    const membresSession = d.membres.filter(m =>
+    const membresEligibles = d.membres.filter(m =>
       memberInProgramme(m, session.programmeId) &&
-      isPriorityProgram(programme, m.categorie) &&
-      pointagesSession.some(p => p.membreId === m.id && (p.statut === 'present' || p.statut === 'absent'))
+      isPriorityProgram(programme, m.categorie)
     );
-    const statutOf = (membreId) => { const pt = pointagesSession.find(p => p.membreId === membreId); return pt ? pt.statut : null; };
-    const present = pointagesSession.filter(p => p.statut === 'present').length;
-    const absent = pointagesSession.filter(p => p.statut === 'absent').length;
+    const membreIdsEligibles = new Set(membresEligibles.map(m => m.id));
+    const pointagesEligibles = pointagesSession.filter(p =>
+      membreIdsEligibles.has(p.membreId) && (p.statut === 'present' || p.statut === 'absent')
+    );
+    const membresSession = membresEligibles.filter(m =>
+      pointagesEligibles.some(p => p.membreId === m.id)
+    );
+    const statutOf = (membreId) => { const pt = pointagesEligibles.find(p => p.membreId === membreId); return pt ? pt.statut : null; };
+    const present = pointagesEligibles.filter(p => p.statut === 'present').length;
+    const absent = pointagesEligibles.filter(p => p.statut === 'absent').length;
     const total = present + absent;
     const taux = total ? Math.round((present / total) * 100) : 0;
 
@@ -137,12 +143,7 @@ function buildReportDoc(scope, yearFilter, sessionId) {
   const membresInScope = (scope === 'global' ? d.membres : d.membres.filter(m => memberInProgramme(m, scope))).filter(m => !m.ap);
   const nbH = membresInScope.filter(m => m.sexe === 'H').length;
   const nbF = membresInScope.filter(m => m.sexe === 'F').length;
-  const globalPts = (scope === 'global' ? d.sessions : d.sessions.filter(s => s.programmeId === scope))
-    .filter(s => periodMatches(s.date, yearFilter))
-    .map(s => s.id);
-  const ptsInScope = d.pointages.filter(p => globalPts.includes(p.sessionId));
-  const presentCount = ptsInScope.filter(p => p.statut === 'present').length;
-  const tauxGlobal = ptsInScope.length ? Math.round((presentCount / ptsInScope.length) * 100) : 0;
+  const tauxGlobal = scopedStats(d, scope === 'global' ? 'global' : scope, yearFilter).tauxPresence;
 
   // ---------- Cartes "Effectifs" ----------
   doc.setFont('times', 'bold'); doc.setFontSize(12.5); doc.setTextColor(...ink);
