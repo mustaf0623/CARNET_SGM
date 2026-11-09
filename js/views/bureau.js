@@ -148,7 +148,7 @@ function renderBureauReunions(d, mandat) {
           return `<div class="ledger-row" style="cursor:pointer;" data-open-reunion="${r.id}">
             <div style="flex:1;">
               <div class="prog-name">Réunion n°${r.numero}${odjPreview ? ' — ' + escapeHtml(odjPreview) : ''}</div>
-              <div style="font-size:11.5px;color:var(--ink-faint);">${fmtDate(r.date)}${horaires ? ' · ' + escapeHtml(horaires) : ''}${president ? ' · Présidence : ' + escapeHtml(president.prenom + ' ' + president.nom) : ''} · ${present} présent(s) / ${pts.length + extraPresents} pointé(s)${r.pvTexte || r.pvLien ? ' · PV disponible' : ''}</div>
+              <div style="font-size:11.5px;color:var(--ink-faint);">${fmtDate(r.date)}${r.lieu ? ' · ' + escapeHtml(r.lieu) : ''}${horaires ? ' · ' + escapeHtml(horaires) : ''}${president ? ' · Présidence : ' + escapeHtml(president.prenom + ' ' + president.nom) : ''} · ${present} présent(s) / ${pts.length + extraPresents} pointé(s)${r.pvTexte || r.pvLien ? ' · PV disponible' : ''}</div>
             </div>
             ${readOnly ? '' : `<button class="edit-name-btn delete-reunion-btn" data-id="${r.id}" style="color:var(--terracotta);">supprimer</button>`}
           </div>`;
@@ -168,6 +168,7 @@ function renderBureauReunionDetail(d, mandat) {
       <div class="card">
         <button class="btn btn-ghost btn-sm" id="backToReunionsBtn">← Retour aux réunions</button>
         <h3 class="card-title" style="margin-top:12px;">Procès-verbal — Réunion n°${r.numero}</h3>
+        <div class="card-sub">${fmtDate(r.date)}${r.lieu ? ' · Lieu : ' + escapeHtml(r.lieu) : ''}</div>
         <div style="white-space:pre-wrap;line-height:1.7;">${escapeHtml(r.pvTexte || 'Aucun procès-verbal rédigé pour cette réunion.')}</div>
         ${safePvLien ? `<div style="margin-top:12px;"><a href="${escapeHtml(safePvLien)}" target="_blank" rel="noopener noreferrer">Ouvrir le procès-verbal joint</a></div>` : ''}
       </div>
@@ -183,6 +184,7 @@ function renderBureauReunionDetail(d, mandat) {
       <h3 class="card-title" style="margin-top:12px;">Réunion n°${r.numero}</h3>
       <div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:12px;">
         <div class="field"><label>Date</label><input type="date" id="reunionDateInput" value="${escapeHtml(r.date)}"></div>
+        <div class="field"><label>Lieu</label><input type="text" id="reunionLieuInput" placeholder="Lieu de la réunion" value="${escapeHtml(r.lieu || '')}"></div>
         <div class="field"><label>Heure de début</label><input type="time" id="reunionHeureDebutInput" value="${escapeHtml((r.heureDebut || '').slice(0, 5))}"></div>
         <div class="field"><label>Heure de fin</label><input type="time" id="reunionHeureFinInput" value="${escapeHtml((r.heureFin || '').slice(0, 5))}"></div>
       </div>
@@ -202,7 +204,7 @@ function renderBureauReunionDetail(d, mandat) {
 
       <div class="card-title" style="font-size:14px;margin:20px 0 8px;">Pointage des membres du Bureau</div>
       <div id="bureauMemberList">
-        ${membres.map(bm => memberRow(bm.membre, pointagesMap.get(bm.membreId), true)).join('') || emptyRow('Aucun membre du Bureau à pointer pour ce mandat.')}
+        ${membres.map(bm => memberRow(bm.membre, pointagesMap.get(bm.membreId), false)).join('') || emptyRow('Aucun membre du Bureau à pointer pour ce mandat.')}
       </div>
       <button class="btn btn-primary" id="saveReunionPointageBtn" style="margin-top:10px;">Enregistrer le pointage</button>
 
@@ -392,7 +394,7 @@ function attachBureauEvents() {
       && String(item.poste.nom || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().includes('president'));
     const reunion = {
       id: uid(), mandatId: mandat.id, numero, date, ordreDuJour, pvTexte: '', pvLien: '',
-      heureDebut: '', heureFin: '', presidentSeanceMembreId: presidentDefault ? presidentDefault.membreId : '',
+      lieu: '', heureDebut: '', heureFin: '', presidentSeanceMembreId: presidentDefault ? presidentDefault.membreId : '',
     };
     d.bureauReunions.push(reunion);
     await saveData();
@@ -446,6 +448,7 @@ function attachBureauEvents() {
     const r = d.bureauReunions.find(x => x.id === state.bureauReunionId);
     if (!r) return;
     r.date = document.getElementById('reunionDateInput').value || r.date;
+    r.lieu = document.getElementById('reunionLieuInput').value.trim();
     r.ordreDuJour = document.getElementById('reunionOdjInput').value.trim();
     r.heureDebut = document.getElementById('reunionHeureDebutInput').value || '';
     r.heureFin = document.getElementById('reunionHeureFinInput').value || '';

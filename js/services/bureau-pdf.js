@@ -97,6 +97,12 @@ function buildProcesVerbalPdf(r, mandat, membresAssoc, d) {
 
   let y = 44;
   doc.setTextColor(...ink);
+  if (r.lieu) {
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
+    const locationLines = doc.splitTextToSize(`Lieu : ${r.lieu}`, contentW);
+    doc.text(locationLines, margin, y);
+    y += locationLines.length * 5 + 2;
+  }
   if (r.ordreDuJour) {
     doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.text('Ordre du jour', margin, y); y += 6;
     doc.setFont('helvetica', 'normal'); doc.setFontSize(10.5);

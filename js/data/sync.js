@@ -184,6 +184,7 @@ async function pullFromSupabase() {
   const bureauReunions = (bReunionRes.data || []).map(r => ({
     id: r.id, mandatId: r.mandat_id, numero: r.numero, date: r.date,
     ordreDuJour: r.ordre_du_jour || '', pvTexte: r.pv_texte || '', pvLien: r.pv_lien || '',
+    lieu: r.lieu || '',
     heureDebut: r.heure_debut || '', heureFin: r.heure_fin || '',
     presidentSeanceMembreId: r.president_seance_membre_id || '',
   }));
@@ -340,6 +341,7 @@ async function pushToSupabase() {
     snapshotMaps.bureauReunions = await syncTable('bureau_reunions', state.data.bureauReunions, r => ({
       id: r.id, mandat_id: r.mandatId, numero: r.numero, date: r.date,
       ordre_du_jour: r.ordreDuJour || '', pv_texte: r.pvTexte || '', pv_lien: r.pvLien || '',
+      lieu: r.lieu || '',
       heure_debut: r.heureDebut || null, heure_fin: r.heureFin || null,
       president_seance_membre_id: r.presidentSeanceMembreId || null,
     }), snapshotMaps.bureauReunions);
