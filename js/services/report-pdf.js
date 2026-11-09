@@ -51,22 +51,26 @@ function buildReportDoc(scope, yearFilter, sessionId) {
   if (session) {
     const programme = d.programmes.find(p => p.id === session.programmeId);
     const pointagesSession = d.pointages.filter(p => p.sessionId === session.id);
-    const membresEligibles = d.membres.filter(m =>
-      memberInProgramme(m, session.programmeId) &&
-      isPriorityProgram(programme, m.categorie)
-    );
-    const membreIdsEligibles = new Set(membresEligibles.map(m => m.id));
-    const pointagesEligibles = pointagesSession.filter(p =>
-      membreIdsEligibles.has(p.membreId) && (p.statut === 'present' || p.statut === 'absent')
-    );
-    const membresSession = membresEligibles.filter(m =>
-      pointagesEligibles.some(p => p.membreId === m.id)
-    );
-    const statutOf = (membreId) => { const pt = pointagesEligibles.find(p => p.membreId === membreId); return pt ? pt.statut : null; };
-    const present = pointagesEligibles.filter(p => p.statut === 'present').length;
-    const absent = pointagesEligibles.filter(p => p.statut === 'absent').length;
+    const membresProgramme = d.membres.filter(m => memberInProgramme(m, session.programmeId));
+    const membresPrioritaires = membresProgramme.filter(m => isPriorityProgram(programme, m.categorie));
+    const membreIdsPrioritaires = new Set(membresPrioritaires.map(m => m.id));
+    const pointagesValides = pointagesSession.filter(p => p.statut === 'present' || p.statut === 'absent');
+    const pointagesPrioritaires = pointagesValides.filter(p => membreIdsPrioritaires.has(p.membreId));
+    const statutParMembre = new Map(pointagesValides.map(p => [p.membreId, p.statut]));
+    const membresSession = membresProgramme.filter(m => {
+      const statut = statutParMembre.get(m.id);
+      return statut === 'present' || (statut === 'absent' && isPriorityProgram(programme, m.categorie));
+    });
+    const statutOf = (membreId) => statutParMembre.get(membreId) || null;
+    const present = pointagesPrioritaires.filter(p => p.statut === 'present').length;
+    const absent = pointagesPrioritaires.filter(p => p.statut === 'absent').length;
     const total = present + absent;
     const taux = total ? Math.round((present / total) * 100) : 0;
+    const membresNonPrioritaires = membresProgramme.filter(m => !isPriorityProgram(programme, m.categorie));
+    const presentsNonPrioritaires = membresNonPrioritaires.filter(m => statutParMembre.get(m.id) === 'present').length;
+    const tauxNonPrioritaires = membresNonPrioritaires.length
+      ? Math.round((presentsNonPrioritaires / membresNonPrioritaires.length) * 100)
+      : 0;
 
     doc.setFont('times', 'bold'); doc.setFontSize(12.5); doc.setTextColor(...ink);
     doc.text('Lieu : ' + sessionLieu(session), margin, y);
@@ -97,6 +101,13 @@ function buildReportDoc(scope, yearFilter, sessionId) {
       doc.text(c.label, cx + 6, y + 17.5);
     });
     y += cardH + 12;
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(...faint);
+    doc.text(
+      'Non-prioritaires présents : ' + presentsNonPrioritaires + ' / ' + membresNonPrioritaires.length +
+      ' inscrits (' + tauxNonPrioritaires + '%)',
+      margin, y
+    );
+    y += 8;
 
     doc.setFont('times', 'bold'); doc.setFontSize(12.5); doc.setTextColor(...ink);
     doc.text('Liste de présence', margin, y);
