@@ -57,6 +57,9 @@ function buildReportDoc(scope, yearFilter, sessionId) {
     const pointagesValides = pointagesSession.filter(p => p.statut === 'present' || p.statut === 'absent');
     const pointagesPrioritaires = pointagesValides.filter(p => membreIdsPrioritaires.has(p.membreId));
     const statutParMembre = new Map(pointagesValides.map(p => [p.membreId, p.statut]));
+    const membresEnRetard = new Set(pointagesValides
+      .filter(p => p.statut === 'present' && p.retard)
+      .map(p => p.membreId));
     const membresSession = membresProgramme.filter(m => {
       const statut = statutParMembre.get(m.id);
       return statut === 'present' || (statut === 'absent' && isPriorityProgram(programme, m.categorie));
@@ -123,7 +126,17 @@ function buildReportDoc(scope, yearFilter, sessionId) {
       const label = statut === 'present' ? 'Présent' : 'Absent';
       const color = statut === 'present' ? emerald : statut === 'absent' ? terracotta : faint;
       doc.setFont('helvetica', 'bold'); doc.setFontSize(9.5); doc.setTextColor(...color);
-      doc.text(label, pageW - margin - 3, y, { align: 'right' });
+      if (membresEnRetard.has(m.id)) {
+        const badgeWidth = 18;
+        const badgeX = pageW - margin - 3 - badgeWidth;
+        doc.text(label, badgeX - 2, y, { align: 'right' });
+        doc.setFillColor(255, 238, 230);
+        doc.roundedRect(badgeX, y - 4.5, badgeWidth, 5.5, 2, 2, 'F');
+        doc.setFontSize(7.5); doc.setTextColor(...terracotta);
+        doc.text('Retard', badgeX + badgeWidth / 2, y - 0.7, { align: 'center' });
+      } else {
+        doc.text(label, pageW - margin - 3, y, { align: 'right' });
+      }
       y += 8;
     });
     if (!membresSession.length) {
