@@ -12,8 +12,9 @@ function renderPointage() {
     ? null
     : d.sessions.find(s => s.id === state.pointageSessionId);
   const legacySession = !!selectedSession && !selectedSession.heureDebut && !selectedSession.heureFin;
+  const selectedSessionLieu = selectedSession ? sessionAttendanceLieu(selectedSession) : '';
   const canMarkAttendance = !!selectedSession && (!!selectedSession.heureDebut || legacySession);
-  const canSaveAttendance = !!selectedSession && (!!selectedSession.heureFin || legacySession);
+  const canSaveAttendance = !!selectedSession && (!!selectedSession.heureFin || legacySession) && !!selectedSessionLieu.trim();
 
   let currentPointages = {};
   if (state.pointageSessionId !== 'new') {
@@ -72,7 +73,7 @@ function renderPointage() {
         </label>
       </div>
       ${selectedSession ? `<div class="card-sub" id="sessionSummary" style="margin-bottom:12px;">
-        Lieu : ${escapeHtml(sessionLieu(selectedSession) || 'Non renseigné')}
+        Lieu : ${escapeHtml(selectedSessionLieu || 'Non renseigné')}
         ${sessionHours(selectedSession) ? ' · Horaires : ' + escapeHtml(sessionHours(selectedSession)) : ''}
       </div>` : ''}
       <div id="sessionStatus" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px;">
@@ -83,13 +84,17 @@ function renderPointage() {
           : selectedSession.heureDebut && !selectedSession.heureFin
             ? `<div class="field"><label for="endSessionTime">Heure de fin</label><input type="time" id="endSessionTime"></div>
                <button class="btn btn-primary" id="endSessionBtn">${ICONS.mark} Marquer l’heure de fin</button>
-               <span style="font-size:12px;color:var(--ink-faint);">Le pointage est ouvert. Marquez l’heure de fin pour pouvoir l’enregistrer.</span>`
+               <span style="font-size:12px;color:var(--ink-faint);">Marquez l’heure de fin et renseignez le lieu pour enregistrer le pointage.</span>`
             : legacySession
               ? `<span style="font-size:12px;color:var(--ink-faint);">Ancienne séance — horaires non renseignés.</span>`
               : selectedSession.heureFin
                 ? `<span style="font-size:12px;color:var(--ink-faint);">Programme terminé : ${escapeHtml(sessionHours(selectedSession))}</span>`
                 : ''}
       </div>
+      ${selectedSession && !selectedSessionLieu ? `<div class="field" style="max-width:320px;margin-bottom:14px;">
+        <label for="sessionVenueInput">Lieu</label>
+        <input type="text" id="sessionVenueInput" placeholder="Saisissez le lieu du programme" value="${escapeHtml(state.pointageLieu || '')}">
+      </div>` : ''}
       <div class="card-sub" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">
         <span>${membres.length} membre${membres.length > 1 ? 's' : ''} inscrit${membres.length > 1 ? 's' : ''}</span>
         <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--ink-dim);font-weight:600;cursor:pointer;">
@@ -154,7 +159,10 @@ function attendanceFingerprint(programmeId, date, lieu, presentMemberIds) {
     + Array.from(new Set(presentMemberIds)).sort().map(encodeField).join('');
 }
 function sessionAttendanceLieu(session) {
-  return session.lieu || session.label || '';
+  const lieu = String(session.lieu || '').trim();
+  const label = String(session.label || '').trim();
+  if (lieu && !(lieu.toLowerCase() === 'séance' && label.toLowerCase() === 'séance')) return lieu;
+  return label.toLowerCase() === 'séance' ? '' : label;
 }
 function sessionTimestampForTime(date, time) {
   if (!date || !time) return '';
@@ -188,7 +196,12 @@ function attachPointageEvents() {
   const progSel = document.getElementById('progSelect');
   if (progSel) progSel.addEventListener('change', e => { state.pointageProgId = e.target.value; state.pointageSessionId = 'new'; state.pointageLieu = ''; render(); });
   const sessSel = document.getElementById('sessionSelect');
-  if (sessSel) sessSel.addEventListener('change', e => { state.pointageSessionId = e.target.value; if (e.target.value === 'new') state.pointageLieu = ''; render(); });
+  if (sessSel) sessSel.addEventListener('change', e => {
+    state.pointageSessionId = e.target.value;
+    const session = d.sessions.find(item => item.id === e.target.value);
+    state.pointageLieu = session ? sessionAttendanceLieu(session) : '';
+    render();
+  });
   const fastToggle = document.getElementById('fastModeToggle');
   if (fastToggle) fastToggle.addEventListener('change', e => { state.pointageFastMode = e.target.checked; render(); });
   const memberSearch = document.getElementById('memberSearch');
@@ -208,6 +221,19 @@ function attachPointageEvents() {
   if (dateInput) dateInput.addEventListener('change', e => state.pointageDate = e.target.value);
   const lieuInput = document.getElementById('sessionLieu');
   if (lieuInput) lieuInput.addEventListener('input', e => state.pointageLieu = e.target.value);
+  const sessionVenueInput = document.getElementById('sessionVenueInput');
+  if (sessionVenueInput) sessionVenueInput.addEventListener('input', e => {
+    state.pointageLieu = e.target.value;
+    const session = d.sessions.find(item => item.id === state.pointageSessionId);
+    const saveBtn = document.getElementById('saveSession');
+    const canFinish = !!session && (!!session.heureFin || (!session.heureDebut && !session.heureFin));
+    if (saveBtn) saveBtn.disabled = !canFinish || !e.target.value.trim();
+    const summary = document.getElementById('sessionSummary');
+    if (summary && session) {
+      summary.textContent = 'Lieu : ' + (e.target.value.trim() || 'Non renseigné')
+        + (sessionHours(session) ? ' · Horaires : ' + sessionHours(session) : '');
+    }
+  });
   const startSessionBtn = document.getElementById('startSessionBtn');
   if (startSessionBtn) startSessionBtn.addEventListener('click', async () => {
     if (state.pointageSessionId !== 'new') return;
@@ -234,13 +260,21 @@ function attachPointageEvents() {
     if (!session || !session.heureDebut || session.heureFin) return;
     const heureFin = sessionTimestampForTime(session.date, document.getElementById('endSessionTime')?.value || '');
     if (!heureFin) { showToast('Veuillez saisir l’heure de fin du programme'); return; }
+    const lieu = (document.getElementById('sessionVenueInput')?.value || sessionAttendanceLieu(session)).trim();
+    if (lieu) {
+      session.lieu = lieu;
+      session.label = lieu;
+    }
     session.heureFin = heureFin;
     await saveData();
-    showToast('Heure de fin enregistrée — pointage prêt à enregistrer');
+    const hasLieu = !!sessionAttendanceLieu(session).trim();
+    showToast(hasLieu
+      ? 'Heure de fin enregistrée — pointage prêt à enregistrer'
+      : 'Heure de fin enregistrée — renseignez le lieu pour enregistrer le pointage');
     const summary = document.getElementById('sessionSummary');
     if (summary) {
       const hours = sessionHours(session);
-      summary.textContent = 'Lieu : ' + (sessionLieu(session) || 'Non renseigné')
+      summary.textContent = 'Lieu : ' + (sessionAttendanceLieu(session) || 'Non renseigné')
         + (hours ? ' · Horaires : ' + hours : '');
     }
     const status = document.getElementById('sessionStatus');
@@ -248,7 +282,7 @@ function attachPointageEvents() {
       status.innerHTML = `<span style="font-size:12px;color:var(--ink-faint);">Programme terminé : ${escapeHtml(sessionHours(session))}</span>`;
     }
     const saveBtn = document.getElementById('saveSession');
-    if (saveBtn) saveBtn.disabled = false;
+    if (saveBtn) saveBtn.disabled = !hasLieu;
   });
   const deleteSessBtn = document.getElementById('deleteSessionBtn');
   if (deleteSessBtn) deleteSessBtn.addEventListener('click', () => {
@@ -314,6 +348,13 @@ function attachPointageEvents() {
       showToast('Marquez l’heure de fin du programme avant d’enregistrer');
       return;
     }
+    const lieu = (document.getElementById('sessionVenueInput')?.value || sessionAttendanceLieu(session)).trim();
+    if (!lieu) {
+      showToast('Saisissez le lieu du programme avant d’enregistrer le pointage');
+      return;
+    }
+    session.lieu = lieu;
+    session.label = lieu;
     const rows = document.querySelectorAll('#memberList .member-row');
     let marked = 0;
     let apTouched = [];

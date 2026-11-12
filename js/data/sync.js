@@ -185,7 +185,7 @@ async function pullFromSupabase() {
   const membres = (memRes.data || []).map(r => ({ id: r.id, nom: r.nom, prenom: r.prenom, sexe: r.sexe, categorie: r.categorie || '', programmeIds: r.programme_ids || [], allProgrammes: !!r.all_programmes, ap: !!r.ap, extra: r.extra || {} }));
   const sessions = (sessRes.data || []).map(r => ({
     id: r.id, programmeId: r.programme_id, date: r.date, label: r.label,
-    lieu: r.lieu || r.label || '', heureDebut: r.heure_debut || '', heureFin: r.heure_fin || '',
+    lieu: r.lieu || '', heureDebut: r.heure_debut || '', heureFin: r.heure_fin || '',
     attendanceFingerprint: r.attendance_fingerprint || '',
   }));
   const pointages = (ptRes.data || []).map(r => ({ id: r.id, sessionId: r.session_id, membreId: r.membre_id, statut: r.statut, retard: !!r.retard }));
@@ -368,7 +368,7 @@ async function pushToSupabase() {
     snapshotMaps.membres = await syncTable('membres', state.data.membres, m => ({ id: m.id, nom: m.nom, prenom: m.prenom, sexe: m.sexe, categorie: m.categorie || '', programme_ids: m.programmeIds || [], all_programmes: !!m.allProgrammes, ap: !!m.ap, extra: m.extra || {} }), snapshotMaps.membres);
     snapshotMaps.sessions = await syncTable('sessions', state.data.sessions, s => ({
       id: s.id, programme_id: s.programmeId, date: s.date,
-      label: s.label || s.lieu || 'Séance', lieu: s.lieu || s.label || '',
+      label: s.label || s.lieu || 'Séance', lieu: s.lieu || '',
       heure_debut: s.heureDebut || null, heure_fin: s.heureFin || null,
       attendance_fingerprint: s.attendanceFingerprint || null,
     }), snapshotMaps.sessions);
