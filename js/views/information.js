@@ -130,11 +130,11 @@ function renderInformation() {
           </div>
           <div class="field">
             <label for="informationReminderTitle">Titre</label>
-            <input type="text" id="informationReminderTitle" maxlength="160" placeholder="Ex. Envoyer les rapports" value="${escapeHtml(editingReminder ? editingReminder.title : '')}">
+            <input type="text" id="informationReminderTitle" maxlength="160" placeholder="Ex: Sortie Tivaouane" value="${escapeHtml(editingReminder ? editingReminder.title : '')}">
           </div>
           <div class="field">
             <label for="informationReminderContent">Détail du rappel</label>
-            <textarea id="informationReminderContent" rows="4" placeholder="Décrivez le rappel…" style="width:100%;padding:12px;font-family:inherit;font-size:13.5px;line-height:1.6;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);">${escapeHtml(editingReminder ? editingReminder.content : '')}</textarea>
+            <textarea id="informationReminderContent" rows="4" placeholder="Ce à quoi consiste le rappel…" style="width:100%;padding:12px;font-family:inherit;font-size:13.5px;line-height:1.6;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);">${escapeHtml(editingReminder ? editingReminder.content : '')}</textarea>
           </div>
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <button type="button" class="btn btn-primary" id="saveInformationReminderBtn">${editingReminder ? 'Enregistrer les modifications' : 'Ajouter le rappel'}</button>
