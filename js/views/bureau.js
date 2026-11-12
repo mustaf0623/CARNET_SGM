@@ -172,7 +172,7 @@ function renderBureauReunionDetail(d, mandat) {
         <button class="btn btn-ghost btn-sm" id="backToReunionsBtn">← Retour aux réunions</button>
         <h3 class="card-title" style="margin-top:12px;">Procès-verbal — Réunion n°${r.numero}</h3>
         <div class="card-sub">${fmtDate(r.date)}${r.lieu ? ' · Lieu : ' + escapeHtml(r.lieu) : ''}</div>
-        <div style="white-space:pre-wrap;line-height:1.7;">${escapeHtml(r.pvTexte || 'Aucun procès-verbal rédigé pour cette réunion.')}</div>
+        ${r.pvTexte || r.pvLien ? `<button class="btn btn-primary" id="exportPvBtn" style="margin-top:12px;">${ICONS.download} Télécharger le procès-verbal en PDF</button>` : '<div style="margin-top:12px;color:var(--ink-faint);">Aucun procès-verbal rédigé pour cette réunion.</div>'}
         ${safePvLien ? `<div style="margin-top:12px;"><a href="${escapeHtml(safePvLien)}" target="_blank" rel="noopener noreferrer">Ouvrir le procès-verbal joint</a></div>` : ''}
         <div style="display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-top:28px;padding-top:12px;border-top:1px solid var(--line);font-size:12px;">
           <div>Secrétaire de séance : <strong>${escapeHtml(secretaryName)}</strong></div>

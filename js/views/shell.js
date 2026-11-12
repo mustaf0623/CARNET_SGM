@@ -39,6 +39,7 @@ function render() {
         ${accountCanAccessTab('pointage') ? tabBtn('pointage', ICONS.pointage, 'Pointage') : ''}
         ${accountCanAccessTab('membres') ? tabBtn('membres', ICONS.membres, 'Membres') : ''}
         ${accountCanAccessTab('rapports') ? tabBtn('rapports', ICONS.rapports, 'Rapports') : ''}
+        ${accountCanAccessTab('information') ? tabBtn('information', ICONS.information, 'Information') : ''}
         ${accountCanAccessTab('supervision') ? tabBtn('supervision', ICONS.supervision, 'Supervision') : ''}
         ${accountCanAccessTab('bureau') ? tabBtn('bureau', ICONS.bureau, 'Bureau') : ''}
         ${canManageAccounts() ? tabBtn('comptes', ICONS.comptes, 'Comptes') : ''}
@@ -82,6 +83,7 @@ function tabBtn(id, icon, label) {
 function applyReadOnlyUi() {
   const allowedButtons = [
     '#genPdfBtn',
+    '#genInformationPdfBtn',
     '.bureau-subtab-btn',
     '#backToReunionsBtn',
     '.member-name-link',
@@ -95,12 +97,20 @@ function applyReadOnlyUi() {
   if (state.tab === 'bureau') {
     allowedButtons.push('#addMandatBtn', '#addPosteBtn', '#addBureauMembreBtn');
   }
+  if (state.tab === 'information') {
+    allowedButtons.push(
+      '#saveDailyInformationBtn', '#saveInformationReminderBtn',
+      '#cancelInformationReminderEditBtn', '.editInformationReminderBtn',
+      '#informationPreviousWeek', '#informationNextWeek', '.information-day-btn',
+    );
+  }
   document.querySelectorAll('main button').forEach(button => {
     if (!allowedButtons.some(selector => button.matches(selector))) button.hidden = true;
   });
   const allowedControls = [
     '#progSelect', '#sessionSelect', '#memberSearch',
-    '#dashFilter', '#dashYearFilter', '#reportScope', '#reportSession', '#reportYear',
+    '#dashFilter', '#dashYearFilter', '#reportScope', '#reportSession', '#reportYear', '#reportType',
+    '#informationReportPeriod',
     '#watchlistProgramme', '#absenceThreshold', '#memberDetailYear', '#membreSearch', '#membreSort',
     '.membreCatFilterCb', '.membreTypeFilterCb', '.membreActivityFilterCb', '.membreProgFilterCb',
     '#bureauMandatSelect', '#bureauReunionSearch',
@@ -110,6 +120,12 @@ function applyReadOnlyUi() {
     allowedControls.push(
       '#newMandatName', '#newMandatDebut', '#newMandatFin',
       '#newPosteName', '#newBureauMembreSelect', '#newBureauPosteSelect',
+    );
+  }
+  if (state.tab === 'information') {
+    allowedControls.push(
+      '#dailyInformationTitle', '#dailyInformationContent',
+      '#informationReminderDate', '#informationReminderTitle', '#informationReminderContent',
     );
   }
   document.querySelectorAll('main input, main select, main textarea').forEach(control => {
@@ -148,6 +164,7 @@ function renderTab() {
   if (state.tab === 'pointage') return renderPointage();
   if (state.tab === 'membres') return renderMembres();
   if (state.tab === 'rapports') return renderRapports();
+  if (state.tab === 'information' && canManageInformation()) return renderInformation();
   if (state.tab === 'supervision') return renderSupervision();
   if (state.tab === 'comptes' && canManageAccounts()) return renderComptes();
   if (state.tab === 'bureau') return renderBureau();
@@ -159,6 +176,7 @@ function attachTabEvents() {
   if (state.tab === 'pointage') attachPointageEvents();
   if (state.tab === 'membres') attachMembresEvents();
   if (state.tab === 'rapports') attachRapportsEvents();
+  if (state.tab === 'information' && canManageInformation()) attachInformationEvents();
   if (state.tab === 'supervision') attachSupervisionEvents();
   if (state.tab === 'comptes' && canManageAccounts()) attachComptesEvents();
   if (state.tab === 'bureau') attachBureauEvents();

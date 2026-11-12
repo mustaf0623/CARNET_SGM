@@ -16,7 +16,7 @@ async function clearLocalDataCache() {
     catch (e) { console.error('Carnet SGM — impossible d’effacer la copie locale ' + key + ':', e); }
   }
   Object.keys(snapshotMaps).forEach(table => snapshotMaps[table].clear());
-  syncState = { pending: false, snapshots: null };
+  syncState = { pending: false, snapshots: null, presidentBureauPending: false, presidentInformationPending: false };
   if (sbUser) clearCachedAccountAccess(sbUser.id);
   else {
     try {
@@ -46,7 +46,7 @@ async function startApp() {
         return;
       }
       if (localData && syncState.pending && (
-        account.role === 'ca' || (account.role === 'president' && syncState.presidentBureauPending)
+        account.role === 'ca' || (account.role === 'president' && (syncState.presidentBureauPending || syncState.presidentInformationPending))
       )) {
         state.data = localData;
         if (!await pushToSupabase()) throw new Error('synchronisation locale impossible');

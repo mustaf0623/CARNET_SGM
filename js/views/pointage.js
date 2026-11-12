@@ -17,7 +17,7 @@ function renderPointage() {
 
   let currentPointages = {};
   if (state.pointageSessionId !== 'new') {
-    d.pointages.filter(p => p.sessionId === state.pointageSessionId).forEach(p => currentPointages[p.membreId] = p.statut);
+    d.pointages.filter(p => p.sessionId === state.pointageSessionId).forEach(p => currentPointages[p.membreId] = p);
   }
   const programmeSessionIds = new Set(d.sessions
     .filter(session => session.programmeId === state.pointageProgId && session.id !== state.pointageSessionId)
@@ -77,10 +77,12 @@ function renderPointage() {
       </div>` : ''}
       <div id="sessionStatus" style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px;">
         ${!selectedSession
-          ? `<button class="btn btn-primary" id="startSessionBtn">${ICONS.mark} Marquer l’heure de début</button>
+          ? `<div class="field"><label for="startSessionTime">Heure de début</label><input type="time" id="startSessionTime"></div>
+             <button class="btn btn-primary" id="startSessionBtn">${ICONS.mark} Marquer l’heure de début</button>
              <span style="font-size:12px;color:var(--ink-faint);">Le pointage sera déverrouillé au démarrage du programme.</span>`
           : selectedSession.heureDebut && !selectedSession.heureFin
-            ? `<button class="btn btn-primary" id="endSessionBtn">${ICONS.mark} Marquer l’heure de fin</button>
+            ? `<div class="field"><label for="endSessionTime">Heure de fin</label><input type="time" id="endSessionTime"></div>
+               <button class="btn btn-primary" id="endSessionBtn">${ICONS.mark} Marquer l’heure de fin</button>
                <span style="font-size:12px;color:var(--ink-faint);">Le pointage est ouvert. Marquez l’heure de fin pour pouvoir l’enregistrer.</span>`
             : legacySession
               ? `<span style="font-size:12px;color:var(--ink-faint);">Ancienne séance — horaires non renseignés.</span>`
@@ -96,7 +98,10 @@ function renderPointage() {
         </label>
       </div>
       <div id="memberList">
-        ${membres.length ? membres.map(m => memberRow(m, currentPointages[m.id], state.pointageFastMode, !canMarkAttendance)).join('') : emptyRow('Aucun membre inscrit à ce programme.')}
+        ${membres.length ? membres.map(m => {
+          const pointage = currentPointages[m.id];
+          return memberRow(m, pointage ? pointage.statut : undefined, state.pointageFastMode, !canMarkAttendance, !!(pointage && pointage.retard));
+        }).join('') : emptyRow('Aucun membre inscrit à ce programme.')}
         ${membres.length ? '<div id="memberSearchEmpty" class="pointage-search-empty" hidden>Aucun membre ou catégorie ne correspond à cette recherche.</div>' : ''}
       </div>
       ${membres.length ? `<div style="margin-top:20px;display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;">
@@ -113,7 +118,7 @@ function sessionOptionsByYear(sessions, selectedId) {
     `<optgroup label="${y}">${byYear[y].map(s => `<option value="${s.id}" ${s.id === selectedId ? 'selected' : ''}>${fmtDate(s.date)} — ${escapeHtml(sessionLieu(s))}</option>`).join('')}</optgroup>`
   ).join('');
 }
-function memberRow(m, statut, fastMode, disabled) {
+function memberRow(m, statut, fastMode, disabled, retard = false) {
   // En mode rapide, un membre pas encore pointé pour cette séance démarre
   // "absent" par défaut : il suffit de cocher les présents. Un statut déjà
   // enregistré (present/absent) est toujours
@@ -130,10 +135,10 @@ function memberRow(m, statut, fastMode, disabled) {
   const sex = m.sexe === 'H' ? 'Homme' : 'Femme';
   const category = m.categorie && normaliseCategorie(m.categorie) !== normaliseCategorie(sex) ? m.categorie : '';
   const searchText = [m.prenom, m.nom, m.categorie, sex, m.ap ? 'AP ponctuel' : ''].filter(Boolean).join(' ');
-  return `<div class="member-row" data-membre="${m.id}" data-search="${escapeHtml(searchText)}">
+  return `<div class="member-row" data-membre="${m.id}" data-search="${escapeHtml(searchText)}" data-retard="${retard ? 'true' : 'false'}">
     <div class="member-avatar">${initials(m.nom, m.prenom)}</div>
     <div class="member-info">
-      <button type="button" class="member-name-link" data-id="${m.id}" style="background:none;border:none;padding:0;font-size:13.5px;font-weight:700;color:var(--ink);cursor:pointer;text-decoration:underline;text-decoration-color:var(--line-strong);text-align:left;">${escapeHtml(m.prenom)} ${escapeHtml(m.nom)}</button>${m.ap ? ` <span class="pill" style="background:var(--gold-tint);border-color:var(--gold);color:var(--gold);font-size:10px;">AP</span>` : ''}
+      <button type="button" class="member-name-link" data-id="${m.id}" style="background:none;border:none;padding:0;font-size:13.5px;font-weight:700;color:var(--ink);cursor:pointer;text-decoration:underline;text-decoration-color:var(--line-strong);text-align:left;">${escapeHtml(m.prenom)} ${escapeHtml(m.nom)}</button>${m.ap ? ` <span class="pill" style="background:var(--gold-tint);border-color:var(--gold);color:var(--gold);font-size:10px;">AP</span>` : ''}${retard ? ' <span class="member-late-badge pill" style="background:var(--terracotta-tint);border-color:var(--terracotta);color:var(--terracotta);font-size:10px;">Retard</span>' : ''}
       <div class="member-meta">${sex}${category ? ' · ' + escapeHtml(category) : ''}</div>
     </div>
     ${statusHtml}
@@ -150,6 +155,30 @@ function attendanceFingerprint(programmeId, date, lieu, presentMemberIds) {
 }
 function sessionAttendanceLieu(session) {
   return session.lieu || session.label || '';
+}
+function sessionTimestampForTime(date, time) {
+  if (!date || !time) return '';
+  const timestamp = new Date(`${date}T${time}`);
+  return Number.isNaN(timestamp.getTime()) ? '' : timestamp.toISOString();
+}
+function isLateForSession(sessionId) {
+  const session = state.data.sessions.find(item => item.id === sessionId);
+  if (!session || !session.heureDebut || session.heureFin) return false;
+  const startedAt = Date.parse(session.heureDebut);
+  return Number.isFinite(startedAt) && Date.now() - startedAt >= 15 * 60 * 1000;
+}
+function updateMemberLateBadge(row, isLate) {
+  const existingBadge = row.querySelector('.member-late-badge');
+  if (!isLate) {
+    existingBadge?.remove();
+    return;
+  }
+  if (existingBadge) return;
+  const badge = document.createElement('span');
+  badge.className = 'member-late-badge pill';
+  badge.textContent = 'Retard';
+  badge.style.cssText = 'background:var(--terracotta-tint);border-color:var(--terracotta);color:var(--terracotta);font-size:10px;';
+  row.querySelector('.member-name-link')?.insertAdjacentElement('afterend', badge);
 }
 function normalisePointageSearch(value) {
   return String(value || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
@@ -182,13 +211,15 @@ function attachPointageEvents() {
   const startSessionBtn = document.getElementById('startSessionBtn');
   if (startSessionBtn) startSessionBtn.addEventListener('click', async () => {
     if (state.pointageSessionId !== 'new') return;
-    startSessionBtn.disabled = true;
     const lieu = (document.getElementById('sessionLieu')?.value || '').trim();
     const date = document.getElementById('sessionDate')?.value || '';
     if (!date) { showToast('Veuillez choisir la date du programme'); return; }
+    const heureDebut = sessionTimestampForTime(date, document.getElementById('startSessionTime')?.value || '');
+    if (!heureDebut) { showToast('Veuillez saisir l’heure de début du programme'); return; }
+    startSessionBtn.disabled = true;
     const session = {
       id: uid(), programmeId: state.pointageProgId, date,
-      label: lieu || 'Séance', lieu, heureDebut: new Date().toISOString(), heureFin: '',
+      label: lieu || 'Séance', lieu, heureDebut, heureFin: '',
     };
     d.sessions.push(session);
     state.pointageSessionId = session.id;
@@ -201,7 +232,9 @@ function attachPointageEvents() {
   if (endSessionBtn) endSessionBtn.addEventListener('click', async () => {
     const session = d.sessions.find(s => s.id === state.pointageSessionId);
     if (!session || !session.heureDebut || session.heureFin) return;
-    session.heureFin = new Date().toISOString();
+    const heureFin = sessionTimestampForTime(session.date, document.getElementById('endSessionTime')?.value || '');
+    if (!heureFin) { showToast('Veuillez saisir l’heure de fin du programme'); return; }
+    session.heureFin = heureFin;
     await saveData();
     showToast('Heure de fin enregistrée — pointage prêt à enregistrer');
     const summary = document.getElementById('sessionSummary');
@@ -245,16 +278,26 @@ function attachPointageEvents() {
       if (btn.disabled) return;
       const wasActive = btn.classList.contains('active');
       const onlyOneBtn = row.querySelectorAll('.status-btn').length === 1;
+      const isLate = btn.dataset.statut === 'present' && isLateForSession(state.pointageSessionId);
       row.querySelectorAll('.status-btn').forEach(b => {
         b.classList.remove('active'); b.querySelector('.stamp')?.remove();
         if (onlyOneBtn) b.textContent = 'Absent';
       });
-      if (onlyOneBtn && wasActive) return; // re-clic sur "Présent" déjà actif : il redevient absent
+      if (onlyOneBtn && wasActive) {
+        row.dataset.retard = 'false';
+        row.querySelector('.member-late-badge')?.remove();
+        return;
+      }
       btn.classList.add('active');
       if (btn.dataset.statut === 'present') {
+        row.dataset.retard = String(isLate);
         btn.textContent = '✓ Présent';
         const s = document.createElement('span'); s.className = 'stamp'; s.innerHTML = ICONS.stamp;
         btn.appendChild(s);
+        updateMemberLateBadge(row, isLate);
+      } else {
+        row.dataset.retard = 'false';
+        row.querySelector('.member-late-badge')?.remove();
       }
     });
   });
@@ -282,7 +325,10 @@ function attachPointageEvents() {
       if (active) statut = active.dataset.statut;
       else if (state.pointageFastMode) statut = 'absent';
       else return;
-      pointagesToSave.push({ id: uid(), sessionId, membreId, statut });
+      pointagesToSave.push({
+        id: uid(), sessionId, membreId, statut,
+        retard: statut === 'present' && row.dataset.retard === 'true',
+      });
       marked++;
       const membre = d.membres.find(m => m.id === membreId);
       if (membre && membre.ap) apTouched.push(membre);

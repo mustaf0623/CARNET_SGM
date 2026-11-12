@@ -4,6 +4,7 @@ function emptyData() {
   return {
     profile: { name: '' }, programmes: [], membres: [], sessions: [], pointages: [],
     bureauMandats: [], bureauPostes: [], bureauMembres: [], bureauReunions: [], bureauPointages: [], bureauPresenceExtras: [],
+    informations: [],
   };
 }
 
@@ -21,6 +22,13 @@ let state = {
   bureauReunionId: null,
   bureauMemberDetailMembreId: null,
   bureauReunionSearch: '',
+  informationDate: todayISO(),
+  informationWeekStart: (() => {
+    const date = new Date();
+    date.setDate(date.getDate() - (date.getDay() + 6) % 7);
+    return date.toISOString().slice(0, 10);
+  })(),
+  informationReminderEditId: null,
   dashProgFilter: 'global',
   dashYearFilter: 'toutes',
   membreSearch: '',
@@ -43,6 +51,8 @@ let state = {
   completeInfoQueue: [],
   reportScope: 'global',
   reportSessionId: 'toutes',
+  reportType: 'presence',
+  informationReportPeriod: 'toutes',
   supervisionProgFilter: 'global',
   supervisionYearFilter: 'toutes',
   supervisionLieuA: '',
@@ -55,11 +65,17 @@ function isPresidentReadOnly() {
 function canManageAccounts() {
   return !!(state.account && state.account.role === 'ca' && state.account.accountAdmin);
 }
+function canManageInformation() {
+  return !!(isPresidentReadOnly() || canManageAccounts());
+}
 function accountCanAccessTab(tab) {
   if (!state.account) return false;
-  if (state.account.role === 'ca') return tab !== 'comptes' || canManageAccounts();
+  if (state.account.role === 'ca') {
+    return (tab !== 'comptes' || canManageAccounts())
+      && (tab !== 'information' || canManageInformation());
+  }
   if (state.account.role === 'president') {
-    return ['dashboard', 'membres', 'rapports', 'supervision', 'bureau'].includes(tab);
+    return ['dashboard', 'membres', 'rapports', 'supervision', 'bureau', 'information'].includes(tab);
   }
   return false;
 }
@@ -74,7 +90,7 @@ function accountCanReadReportScope(scope) {
     : accountCanReadProgramme(scope);
 }
 
-function ensureBureauFields(data) {
+function ensureDataFields(data) {
   if (!data) return data;
   if (!Array.isArray(data.bureauMandats)) data.bureauMandats = [];
   if (!Array.isArray(data.bureauPostes)) data.bureauPostes = [];
@@ -82,27 +98,33 @@ function ensureBureauFields(data) {
   if (!Array.isArray(data.bureauReunions)) data.bureauReunions = [];
   if (!Array.isArray(data.bureauPointages)) data.bureauPointages = [];
   if (!Array.isArray(data.bureauPresenceExtras)) data.bureauPresenceExtras = [];
+  if (!Array.isArray(data.informations)) data.informations = [];
   return data;
 }
 async function loadData() {
-  try { const v = await idbGet('carnet-data'); if (v) return ensureBureauFields(v); } catch (e) { /* premier lancement */ }
-  try { const backup = localStorage.getItem(LOCAL_BACKUP_KEY); return backup ? ensureBureauFields(JSON.parse(backup)) : null; } catch (e) { /* noop */ }
+  try { const v = await idbGet('carnet-data'); if (v) return ensureDataFields(v); } catch (e) { /* premier lancement */ }
+  try { const backup = localStorage.getItem(LOCAL_BACKUP_KEY); return backup ? ensureDataFields(JSON.parse(backup)) : null; } catch (e) { /* noop */ }
   return null;
 }
 async function saveData(options = {}) {
   const presidentBureauCreation = isPresidentReadOnly() && options.presidentBureauCreation === true;
-  if (isPresidentReadOnly() && !presidentBureauCreation) {
+  const presidentInformationChange = isPresidentReadOnly() && options.presidentInformationChange === true;
+  if (isPresidentReadOnly() && !presidentBureauCreation && !presidentInformationChange) {
     showToast('Votre compte est en lecture seule');
     return false;
   }
   // Copie synchrone avant toute attente : elle reste disponible même si l'app se ferme maintenant.
   try { localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify(state.data)); } catch (e) { /* stockage indisponible */ }
-  await saveSyncState(true, presidentBureauCreation || syncState.presidentBureauPending);
+  await saveSyncState(
+    true,
+    presidentBureauCreation || syncState.presidentBureauPending,
+    presidentInformationChange || syncState.presidentInformationPending
+  );
   try { localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify(state.data)); } catch (e) { /* stockage indisponible */ }
   try { await idbSet('carnet-data', state.data); }
   catch (e) { showToast('Échec de la sauvegarde locale'); }
   if (sb && sbUser) {
-    if (options.waitForSync || presidentBureauCreation) return await pushToSupabase();
+    if (options.waitForSync || presidentBureauCreation || presidentInformationChange) return await pushToSupabase();
     pushToSupabase();
   }
   return true;

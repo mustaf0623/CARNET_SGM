@@ -3,7 +3,7 @@
 // Stale-While-Revalidate pour les ressources externes (CDN, polices),
 // + cache des assets externes utilisés (CDN, polices) et fallback navigation hors-ligne.
 // À incrémenter à CHAQUE déploiement (et à compléter si un fichier est ajouté ci-dessous).
-const CACHE_NAME = 'carnet-sgm-v31B';
+const CACHE_NAME = 'carnet-sgm-v31D';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -40,6 +40,7 @@ const CORE_ASSETS = [
   './js/data/reconcile.js',
   './js/services/export-members.js',
   './js/services/report-pdf.js',
+  './js/services/information-pdf.js',
   './js/services/bureau-pdf.js',
   './js/components/confirm-modal.js',
   './js/components/member-detail-modal.js',
@@ -54,6 +55,7 @@ const CORE_ASSETS = [
   './js/views/membres.js',
   './js/views/import.js',
   './js/views/rapports.js',
+  './js/views/information.js',
   './js/views/comptes.js',
   './js/views/bureau.js',
   './js/views/auth.js',

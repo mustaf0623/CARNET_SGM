@@ -35,6 +35,13 @@ function renderRapports() {
     + (months.length ? `<optgroup label="Par mois">${months.map(mo => `<option value="${mo}">${monthLabel(mo)}</option>`).join('')}</optgroup>` : '');
   const progSessions = scope !== 'global' ? d.sessions.filter(s => s.programmeId === scope && accountCanReadProgramme(s.programmeId)) : [];
   const sessionOptions = `<option value="toutes" ${sessionId === 'toutes' ? 'selected' : ''}>Toutes les séances</option>` + sessionOptionsByYear(progSessions, sessionId);
+  const reportType = state.reportType === 'information' ? 'information' : 'presence';
+  state.reportType = reportType;
+  const informationReportPeriod = state.informationReportPeriod || 'toutes';
+  const informationRange = informationRangeForPeriod(informationReportPeriod);
+  const informationEntries = informationInRange(informationRange.fromDate, informationRange.toDate);
+  const informationDayCount = informationEntries.filter(item => item.kind === 'jour').length;
+  const informationReminderCount = informationEntries.filter(item => item.kind === 'rappel').length;
   return `
     <div class="page-head">
       <div>
@@ -43,6 +50,36 @@ function renderRapports() {
         <p class="page-sub">${isPresidentReadOnly() ? 'Consultez les données de présence dans la portée autorisée et générez un rapport PDF signé au nom du Collège des présidents.' : 'Générez un rapport statistique détaillé, global, par programme, par mois ou pour une séance précise, signé et prêt à partager.'}</p>
       </div>
     </div>
+    <div class="card" style="margin-bottom:16px;">
+      <div class="field" style="max-width:420px;">
+        <label for="reportType">Type de rapport</label>
+        <select id="reportType" style="width:100%;">
+          <option value="presence" ${reportType === 'presence' ? 'selected' : ''}>Rapport de présence</option>
+          <option value="information" ${reportType === 'information' ? 'selected' : ''}>Informations et rappels</option>
+        </select>
+      </div>
+    </div>
+    ${reportType === 'information' ? `
+    <div class="grid grid-2">
+      <div class="card">
+        <h3 class="card-title">Configuration du rapport d’informations</h3>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin:14px 0;">
+          <div class="field" style="flex:1;min-width:220px;max-width:420px;">
+            <label for="informationReportPeriod">Période</label>
+            <select id="informationReportPeriod" style="width:100%;">${informationPeriodOptions(informationReportPeriod)}</select>
+          </div>
+        </div>
+        <p style="font-size:12.5px;color:var(--ink-faint);line-height:1.6;">Choisissez toutes les périodes, une année, un mois ou une semaine. Seules les périodes contenant des informations ou des rappels sont proposées.</p>
+        <button class="btn btn-primary" id="genInformationPdfBtn" style="margin-top:8px;">${ICONS.download} Générer le PDF</button>
+      </div>
+      <div class="card">
+        <h3 class="card-title">Signature du rapport</h3>
+        <div class="card-sub">Signature officielle du Collège des présidents</div>
+        <div style="font-family:'Fraunces',serif;font-size:17px;font-weight:700;">Collège des présidents</div>
+        <div class="card-sub" style="margin:5px 0 0;">${informationDayCount} journée${informationDayCount > 1 ? 's' : ''} d’informations · ${informationReminderCount} rappel${informationReminderCount > 1 ? 's' : ''}</div>
+      </div>
+    </div>
+    ` : `
     <div class="grid grid-2">
       <div class="card">
         <h3 class="card-title">Configuration du rapport</h3>
@@ -106,10 +143,26 @@ function renderRapports() {
         </div>`).join('') : emptyRow(`Aucun membre permanent avec ${threshold} absence${threshold > 1 ? 's' : ''} consécutive${threshold > 1 ? 's' : ''} ou plus.`)}
       </div>
     </div>
+    `}
   `;
 }
 
 function attachRapportsEvents() {
+  const reportTypeSel = document.getElementById('reportType');
+  if (reportTypeSel) reportTypeSel.addEventListener('change', e => {
+    state.reportType = e.target.value;
+    render();
+  });
+  const informationPeriodSelect = document.getElementById('informationReportPeriod');
+  if (informationPeriodSelect) informationPeriodSelect.addEventListener('change', e => {
+    state.informationReportPeriod = e.target.value;
+    render();
+  });
+  const genInformationPdfBtn = document.getElementById('genInformationPdfBtn');
+  if (genInformationPdfBtn) genInformationPdfBtn.addEventListener('click', () => {
+    const range = informationRangeForPeriod(document.getElementById('informationReportPeriod').value);
+    downloadInformationReport(range.fromDate, range.toDate);
+  });
   const watchlistProgSel = document.getElementById('watchlistProgramme');
   if (watchlistProgSel) watchlistProgSel.addEventListener('change', e => {
     state.watchlistProgramme = e.target.value;

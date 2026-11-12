@@ -5,12 +5,13 @@ let sbUser = null;
 const snapshotMaps = {
   programmes: new Map(), membres: new Map(), sessions: new Map(), pointages: new Map(),
   bureauMandats: new Map(), bureauPostes: new Map(), bureauMembres: new Map(), bureauReunions: new Map(), bureauPointages: new Map(), bureauPresenceExtras: new Map(),
+  informations: new Map(),
 };
 const LOCAL_BACKUP_KEY = 'carnet-data-backup';
 const SYNC_STATE_KEY = 'carnet-sync-state';
 const SYNC_STATE_BACKUP_KEY = 'carnet-sync-state-backup';
 const LAST_AUTH_ACCOUNT_KEY = 'carnet-last-auth-account-id';
-let syncState = { pending: false, snapshots: null };
+let syncState = { pending: false, snapshots: null, presidentBureauPending: false, presidentInformationPending: false };
 
 function accountFromProfile(profile, user) {
   if (!profile) return null;
@@ -22,6 +23,13 @@ function accountFromProfile(profile, user) {
     accountAdmin: !!profile.account_admin,
     scopeGlobal: !!profile.scope_global,
     scopeProgrammeIds: Array.isArray(profile.scope_program_ids) ? profile.scope_program_ids : [],
+  };
+}
+function informationToRemote(information) {
+  return {
+    id: information.id, date: information.date, kind: information.kind,
+    title: information.title || '', content: information.content || '',
+    updated_at: information.updatedAt || new Date().toISOString(),
   };
 }
 function cacheAccountAccess(account) {
@@ -126,11 +134,16 @@ async function loadSyncState() {
   try { const saved = await idbGet(SYNC_STATE_KEY); if (saved) return saved; } catch (e) { /* copie de secours ci-dessous */ }
   try { const backup = localStorage.getItem(SYNC_STATE_BACKUP_KEY); return backup ? JSON.parse(backup) : null; } catch (e) { return null; }
 }
-async function saveSyncState(pending, presidentBureauPending = syncState.presidentBureauPending) {
+async function saveSyncState(
+  pending,
+  presidentBureauPending = syncState.presidentBureauPending,
+  presidentInformationPending = syncState.presidentInformationPending
+) {
   syncState = {
     pending: !!pending,
     snapshots: serialiseSnapshots(),
     presidentBureauPending: !!pending && !!presidentBureauPending,
+    presidentInformationPending: !!pending && !!presidentInformationPending,
   };
   try { localStorage.setItem(SYNC_STATE_BACKUP_KEY, JSON.stringify(syncState)); } catch (e) { /* stockage indisponible */ }
   try { await idbSet(SYNC_STATE_KEY, syncState); } catch (e) { /* la copie locale reste disponible */ }
@@ -147,10 +160,11 @@ function updateSnapshotsFromCurrent() {
   snapshotMaps.bureauReunions = new Map(state.data.bureauReunions.map(r => [r.id, JSON.stringify(r)]));
   snapshotMaps.bureauPointages = new Map(state.data.bureauPointages.map(r => [r.id, JSON.stringify(r)]));
   snapshotMaps.bureauPresenceExtras = new Map((state.data.bureauPresenceExtras || []).map(r => [r.id, JSON.stringify(r)]));
+  snapshotMaps.informations = new Map((state.data.informations || []).map(r => [r.id, JSON.stringify(r)]));
 }
 
 async function pullFromSupabase() {
-  const [progRes, memRes, sessRes, ptRes, profRes, bMandatRes, bPosteRes, bMembreRes, bReunionRes, bPointageRes, bExtraRes] = await Promise.all([
+  const [progRes, memRes, sessRes, ptRes, profRes, bMandatRes, bPosteRes, bMembreRes, bReunionRes, bPointageRes, bExtraRes, informationRes] = await Promise.all([
     sb.from('programmes').select('*'),
     sb.from('membres').select('*'),
     sb.from('sessions').select('*'),
@@ -162,8 +176,9 @@ async function pullFromSupabase() {
     sb.from('bureau_reunions').select('*'),
     sb.from('bureau_pointages').select('*'),
     sb.from('bureau_presence_extras').select('*'),
+    sb.from('informations').select('*'),
   ]);
-  const queryError = [progRes, memRes, sessRes, ptRes, profRes, bMandatRes, bPosteRes, bMembreRes, bReunionRes, bPointageRes, bExtraRes]
+  const queryError = [progRes, memRes, sessRes, ptRes, profRes, bMandatRes, bPosteRes, bMembreRes, bReunionRes, bPointageRes, bExtraRes, informationRes]
     .find(result => result.error);
   if (queryError) throw queryError.error;
   const programmes = (progRes.data || []).map(r => ({ id: r.id, nom: r.nom, prioriteCategories: r.priorite_categories || [] }));
@@ -173,7 +188,7 @@ async function pullFromSupabase() {
     lieu: r.lieu || r.label || '', heureDebut: r.heure_debut || '', heureFin: r.heure_fin || '',
     attendanceFingerprint: r.attendance_fingerprint || '',
   }));
-  const pointages = (ptRes.data || []).map(r => ({ id: r.id, sessionId: r.session_id, membreId: r.membre_id, statut: r.statut }));
+  const pointages = (ptRes.data || []).map(r => ({ id: r.id, sessionId: r.session_id, membreId: r.membre_id, statut: r.statut, retard: !!r.retard }));
   const name = (profRes.data && profRes.data.name) || '';
   const account = accountFromProfile(profRes.data, sbUser);
   if (account && account.role) cacheAccountAccess(account);
@@ -191,7 +206,8 @@ async function pullFromSupabase() {
   }));
   const bureauPointages = (bPointageRes.data || []).map(r => ({ id: r.id, reunionId: r.reunion_id, membreId: r.membre_id, statut: r.statut }));
   const bureauPresenceExtras = (bExtraRes.data || []).map(r => ({ id: r.id, reunionId: r.reunion_id, name: r.name, poste: r.poste || '', statut: r.statut || 'present' }));
-  return { profile: { name }, account, programmes, membres, sessions, pointages, bureauMandats, bureauPostes, bureauMembres, bureauReunions, bureauPointages, bureauPresenceExtras };
+  const informations = (informationRes.data || []).map(r => ({ id: r.id, date: r.date, kind: r.kind, title: r.title || '', content: r.content || '', updatedAt: r.updated_at || '' }));
+  return { profile: { name }, account, programmes, membres, sessions, pointages, bureauMandats, bureauPostes, bureauMembres, bureauReunions, bureauPointages, bureauPresenceExtras, informations };
 }
 
 async function syncTable(tableName, rows, toRemote, prevMap) {
@@ -247,7 +263,23 @@ async function pushPresidentBureauCreates() {
     await saveSyncState(true, true);
   }
 
-  await saveSyncState(false);
+  return true;
+}
+
+async function pushPresidentInformationChanges() {
+  const rows = state.data.informations || [];
+  const previous = snapshotMaps.informations;
+  const current = new Map(rows.map(row => [row.id, JSON.stringify(row)]));
+  for (const [id, json] of previous) {
+    if (!current.has(id)) throw new Error('Le compte président ne peut pas supprimer des informations.');
+  }
+  const changedRows = rows.filter(row => previous.get(row.id) !== JSON.stringify(row));
+  if (changedRows.length) {
+    const { error } = await sb.from('informations').upsert(changedRows.map(informationToRemote), { onConflict: 'id' });
+    if (error) throw error;
+  }
+  snapshotMaps.informations = current;
+  await saveSyncState(true, syncState.presidentBureauPending, true);
   return true;
 }
 
@@ -309,11 +341,14 @@ async function pushToSupabase() {
   if (!sb || !sbUser) return false;
   if (!state.account) return false;
   if (state.account.role === 'president') {
-    if (!syncState.presidentBureauPending) return false;
+    if (!syncState.presidentBureauPending && !syncState.presidentInformationPending) return false;
     if (syncing) { syncQueued = true; return false; }
     syncing = true;
     try {
-      return await pushPresidentBureauCreates();
+      if (syncState.presidentBureauPending) await pushPresidentBureauCreates();
+      if (syncState.presidentInformationPending) await pushPresidentInformationChanges();
+      await saveSyncState(false);
+      return true;
     } catch (e) {
       console.error('Carnet SGM — échec de synchronisation des ajouts au Bureau:', e);
       showToast('Échec de synchronisation : ' + (e && e.message ? e.message : 'erreur inconnue'));
@@ -335,7 +370,7 @@ async function pushToSupabase() {
       heure_debut: s.heureDebut || null, heure_fin: s.heureFin || null,
       attendance_fingerprint: s.attendanceFingerprint || null,
     }), snapshotMaps.sessions);
-    snapshotMaps.pointages = await syncTable('pointages', state.data.pointages, p => ({ id: p.id, session_id: p.sessionId, membre_id: p.membreId, statut: p.statut }), snapshotMaps.pointages);
+    snapshotMaps.pointages = await syncTable('pointages', state.data.pointages, p => ({ id: p.id, session_id: p.sessionId, membre_id: p.membreId, statut: p.statut, retard: !!p.retard }), snapshotMaps.pointages);
     snapshotMaps.bureauMandats = await syncTable('bureau_mandats', state.data.bureauMandats, m => ({ id: m.id, nom: m.nom, date_debut: m.dateDebut || null, date_fin: m.dateFin || null, actif: !!m.actif }), snapshotMaps.bureauMandats);
     snapshotMaps.bureauPostes = await syncTable('bureau_postes', state.data.bureauPostes, p => ({ id: p.id, nom: p.nom }), snapshotMaps.bureauPostes);
     snapshotMaps.bureauMembres = await syncTable('bureau_membres', state.data.bureauMembres, m => ({ id: m.id, mandat_id: m.mandatId, membre_id: m.membreId, poste_id: m.posteId }), snapshotMaps.bureauMembres);
@@ -349,6 +384,9 @@ async function pushToSupabase() {
     }), snapshotMaps.bureauReunions);
     snapshotMaps.bureauPointages = await syncTable('bureau_pointages', state.data.bureauPointages, p => ({ id: p.id, reunion_id: p.reunionId, membre_id: p.membreId, statut: p.statut }), snapshotMaps.bureauPointages);
     snapshotMaps.bureauPresenceExtras = await syncTable('bureau_presence_extras', state.data.bureauPresenceExtras || [], x => ({ id: x.id, reunion_id: x.reunionId, name: x.name, poste: x.poste || '', statut: x.statut || 'present' }), snapshotMaps.bureauPresenceExtras);
+    if (canManageAccounts()) {
+      snapshotMaps.informations = await syncTable('informations', state.data.informations || [], informationToRemote, snapshotMaps.informations);
+    }
     const { error: profileError } = await sb.from('profiles').upsert({ id: sbUser.id, name: state.data.profile.name });
     if (profileError) throw profileError;
     await saveSyncState(false);
@@ -394,6 +432,7 @@ function handleRemoteChange() {
       state.data.bureauReunions = remote.bureauReunions;
       state.data.bureauPointages = remote.bureauPointages;
       state.data.bureauPresenceExtras = remote.bureauPresenceExtras;
+      state.data.informations = remote.informations;
       updateSnapshotsFromCurrent();
       await idbSet('carnet-data', state.data);
       try { localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify(state.data)); }
@@ -424,5 +463,6 @@ function subscribeRealtime()
     .on('postgres_changes', { event: '*', schema: 'public', table: 'bureau_reunions' }, handleRemoteChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'bureau_pointages' }, handleRemoteChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'bureau_presence_extras' }, handleRemoteChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'informations' }, handleRemoteChange)
     .subscribe();
 }
