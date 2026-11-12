@@ -270,10 +270,12 @@ async function pushPresidentInformationChanges() {
   const rows = state.data.informations || [];
   const previous = snapshotMaps.informations;
   const current = new Map(rows.map(row => [row.id, JSON.stringify(row)]));
-  for (const [id, json] of previous) {
-    if (!current.has(id)) throw new Error('Le compte président ne peut pas supprimer des informations.');
-  }
   const changedRows = rows.filter(row => previous.get(row.id) !== JSON.stringify(row));
+  const deletedIds = Array.from(previous.keys()).filter(id => !current.has(id));
+  if (deletedIds.length) {
+    const { error } = await sb.from('informations').delete().in('id', deletedIds);
+    if (error) throw error;
+  }
   if (changedRows.length) {
     const { error } = await sb.from('informations').upsert(changedRows.map(informationToRemote), { onConflict: 'id' });
     if (error) throw error;

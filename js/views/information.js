@@ -114,7 +114,10 @@ function renderInformation() {
         <label for="dailyInformationContent">Informations du ${fmtDate(state.informationDate)}</label>
         <textarea id="dailyInformationContent" rows="7" placeholder="Saisissez les informations concernant cette date…" style="width:100%;padding:12px;font-family:inherit;font-size:13.5px;line-height:1.6;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);">${escapeHtml(dailyInformation ? dailyInformation.content : '')}</textarea>
       </div>
-      <button type="button" class="btn btn-primary" id="saveDailyInformationBtn" style="margin-top:12px;">${dailyInformation ? 'Modifier les informations' : 'Enregistrer les informations'}</button>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+        <button type="button" class="btn btn-primary" id="saveDailyInformationBtn">${dailyInformation ? 'Modifier les informations' : 'Enregistrer les informations'}</button>
+        ${dailyInformation ? '<button type="button" class="btn btn-ghost btn-sm" id="deleteDailyInformationBtn" style="color:var(--terracotta);">Supprimer cette information</button>' : ''}
+      </div>
     </div>
     <div class="card" style="margin-top:18px;">
       <h3 class="card-title">Rappels</h3>
@@ -145,7 +148,10 @@ function renderInformation() {
               <div style="font-size:11.5px;color:var(--ink-faint);margin:3px 0 6px;">${fmtDate(item.date)}</div>
               <div style="font-size:12.5px;line-height:1.55;white-space:pre-wrap;">${escapeHtml(item.content)}</div>
             </div>
-            <button type="button" class="btn btn-ghost btn-sm editInformationReminderBtn" data-id="${escapeHtml(item.id)}">Modifier</button>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              <button type="button" class="btn btn-ghost btn-sm editInformationReminderBtn" data-id="${escapeHtml(item.id)}">Modifier</button>
+              <button type="button" class="btn btn-ghost btn-sm deleteInformationReminderBtn" data-id="${escapeHtml(item.id)}" style="color:var(--terracotta);">Supprimer</button>
+            </div>
           </div>`).join('') : emptyRow('Aucun rappel enregistré.')}
         </div>
       </div>
@@ -195,6 +201,22 @@ function attachInformationEvents() {
     showToast(existing ? 'Informations modifiées' : 'Informations enregistrées');
     render();
   });
+  document.getElementById('deleteDailyInformationBtn')?.addEventListener('click', () => {
+    const information = informationForDate(state.informationDate, 'jour');
+    if (!information) return;
+    openConfirm(
+      'Supprimer cette information ?',
+      `L’information du ${fmtDate(information.date)} sera définitivement supprimée pour tous les utilisateurs synchronisés. Cette action est irréversible.`,
+      async () => {
+        state.data.informations = state.data.informations.filter(item => item.id !== information.id);
+        const saved = await saveInformationRows();
+        if (!saved) return;
+        showToast('Information supprimée');
+        render();
+      },
+      'Supprimer définitivement'
+    );
+  });
   document.getElementById('saveInformationReminderBtn')?.addEventListener('click', async () => {
     const date = document.getElementById('informationReminderDate').value;
     const title = document.getElementById('informationReminderTitle').value.trim();
@@ -216,6 +238,23 @@ function attachInformationEvents() {
   document.querySelectorAll('.editInformationReminderBtn').forEach(button => button.addEventListener('click', () => {
     state.informationReminderEditId = button.dataset.id;
     render();
+  }));
+  document.querySelectorAll('.deleteInformationReminderBtn').forEach(button => button.addEventListener('click', () => {
+    const reminder = state.data.informations.find(item => item.id === button.dataset.id && item.kind === 'rappel');
+    if (!reminder) return;
+    openConfirm(
+      'Supprimer ce rappel ?',
+      `Le rappel « ${reminder.title} » du ${fmtDate(reminder.date)} sera définitivement supprimé pour tous les utilisateurs synchronisés. Cette action est irréversible.`,
+      async () => {
+        state.data.informations = state.data.informations.filter(item => item.id !== reminder.id);
+        if (state.informationReminderEditId === reminder.id) state.informationReminderEditId = null;
+        const saved = await saveInformationRows();
+        if (!saved) return;
+        showToast('Rappel supprimé');
+        render();
+      },
+      'Supprimer définitivement'
+    );
   }));
   document.getElementById('cancelInformationReminderEditBtn')?.addEventListener('click', () => {
     state.informationReminderEditId = null;

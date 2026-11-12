@@ -100,6 +100,7 @@ function applyReadOnlyUi() {
   if (state.tab === 'information') {
     allowedButtons.push(
       '#saveDailyInformationBtn', '#saveInformationReminderBtn',
+      '#deleteDailyInformationBtn', '.deleteInformationReminderBtn',
       '#cancelInformationReminderEditBtn', '.editInformationReminderBtn',
       '#informationPreviousWeek', '#informationNextWeek', '.information-day-btn',
     );
