@@ -81,7 +81,7 @@ function renderInformation() {
       <div>
         <div class="eyebrow">Communication</div>
         <h1 class="page-title">Information</h1>
-        <p class="page-sub">Saisissez les informations par date et gérez les rappels. Les informations sont accessibles au CA dans Rapports.</p>
+        <p class="page-sub">Saisissez les informations par date et gérez les rappels. Les informations sont accessibles aux elements CA dans Rapports.</p>
       </div>
     </div>
     <div class="card">
