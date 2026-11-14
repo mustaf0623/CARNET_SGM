@@ -1,5 +1,219 @@
 /* js/views/import.js — Import Excel/CSV des membres (mapping, aperçu, confirmation) */
 
+const MEMBER_UPDATE_ID_HEADER = 'Identifiant Carnet (ne pas modifier)';
+const MEMBER_UPDATE_FIRST_NAME_HEADER = 'Prénom du membre (ne pas modifier)';
+const MEMBER_UPDATE_LAST_NAME_HEADER = 'Nom du membre (ne pas modifier)';
+
+function normalizeMemberUpdateHeader(value) {
+  return String(value || '').toLowerCase().normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ');
+}
+
+function normalizeMemberUpdateName(value) {
+  return normalizeMemberUpdateHeader(value);
+}
+
+function memberUpdateReservedHeaders() {
+  return new Set([
+    MEMBER_UPDATE_ID_HEADER,
+    MEMBER_UPDATE_FIRST_NAME_HEADER,
+    MEMBER_UPDATE_LAST_NAME_HEADER,
+  ].map(normalizeMemberUpdateHeader));
+}
+
+function validateMemberUpdateRows(headers, rows, members) {
+  const errors = [];
+  const normalizedHeaders = headers.map(normalizeMemberUpdateHeader);
+  if (normalizedHeaders.some(header => !header)) errors.push('Le fichier contient un en-tête vide.');
+  const duplicateHeaders = normalizedHeaders.filter((header, index) =>
+    header && normalizedHeaders.indexOf(header) !== index
+  );
+  if (duplicateHeaders.length) errors.push('Le fichier contient des en-têtes en double.');
+
+  const idIndex = headers.indexOf(MEMBER_UPDATE_ID_HEADER);
+  const firstNameIndex = headers.indexOf(MEMBER_UPDATE_FIRST_NAME_HEADER);
+  const lastNameIndex = headers.indexOf(MEMBER_UPDATE_LAST_NAME_HEADER);
+  if (idIndex < 0 || firstNameIndex < 0 || lastNameIndex < 0) {
+    errors.push('Les colonnes d’identifiant, de prénom et de nom sont absentes ou modifiées.');
+  }
+  const reserved = memberUpdateReservedHeaders();
+  const fieldHeaders = headers.filter(header => !reserved.has(normalizeMemberUpdateHeader(header)));
+  const unsafeHeaders = new Set(['__proto__', 'prototype', 'constructor']);
+  if (fieldHeaders.some(header => unsafeHeaders.has(normalizeMemberUpdateHeader(header)))) {
+    errors.push('Le fichier contient un nom de colonne réservé et ne peut pas être importé.');
+  }
+  if (!fieldHeaders.length) errors.push('Aucune colonne d’information à mettre à jour ou à ajouter.');
+
+  const memberById = new Map(members.map(member => [String(member.id), member]));
+  const seenIds = new Set();
+  const updates = [];
+  rows.forEach((row, rowIndex) => {
+    if (row.every(value => String(value ?? '').trim() === '')) return;
+    const rowNumber = rowIndex + 2;
+    const id = idIndex < 0 ? '' : String(row[idIndex] ?? '').trim();
+    if (!id) {
+      errors.push(`Ligne ${rowNumber} : identifiant manquant.`);
+      return;
+    }
+    if (seenIds.has(id)) {
+      errors.push(`Ligne ${rowNumber} : identifiant en double (${id}).`);
+      return;
+    }
+    seenIds.add(id);
+    const member = memberById.get(id);
+    if (!member) {
+      errors.push(`Ligne ${rowNumber} : identifiant inconnu (${id}).`);
+      return;
+    }
+    const firstName = String(row[firstNameIndex] ?? '').trim();
+    const lastName = String(row[lastNameIndex] ?? '').trim();
+    if (normalizeMemberUpdateName(firstName) !== normalizeMemberUpdateName(member.prenom)
+      || normalizeMemberUpdateName(lastName) !== normalizeMemberUpdateName(member.nom)) {
+      errors.push(`Ligne ${rowNumber} : le nom ne correspond pas à l’identifiant (${id}).`);
+      return;
+    }
+    updates.push({ member, row });
+  });
+
+  if (!updates.length && !errors.length) errors.push('Aucune ligne de membre à mettre à jour.');
+  return { errors, fieldHeaders, updates };
+}
+
+function mergeMemberUpdateExtra(member, row, headers, fieldHeaders) {
+  const extra = { ...(member.extra || {}) };
+  fieldHeaders.forEach(header => {
+    const columnIndex = headers.indexOf(header);
+    const rawValue = row[columnIndex];
+    const value = rawValue == null ? '' : String(rawValue).trim();
+    if (value !== '' || !Object.prototype.hasOwnProperty.call(extra, header)) {
+      extra[header] = value;
+    }
+  });
+  return extra;
+}
+
+function exportMemberUpdateWorkbook() {
+  const members = state.data.membres;
+  if (!members.length) {
+    showToast('Aucun membre à exporter');
+    return;
+  }
+  const reserved = memberUpdateReservedHeaders();
+  const extraKeys = extraFieldKeys(state.data);
+  const unsafeHeaders = new Set(['__proto__', 'prototype', 'constructor']);
+  const normalizedKeys = extraKeys.map(normalizeMemberUpdateHeader);
+  const collisions = extraKeys.filter((key, index) =>
+    !key.trim()
+    || key !== key.trim()
+    || reserved.has(normalizedKeys[index])
+    || unsafeHeaders.has(normalizedKeys[index])
+    || normalizedKeys.indexOf(normalizedKeys[index]) !== index
+  );
+  if (collisions.length) {
+    showToast('Renommez les champs complémentaires vides, en double ou réservés au fichier de mise à jour');
+    return;
+  }
+
+  const sortedMembers = members.slice().sort((a, b) =>
+    new Intl.Collator('fr', { sensitivity: 'base', numeric: true })
+      .compare(`${a.nom || ''} ${a.prenom || ''}`, `${b.nom || ''} ${b.prenom || ''}`)
+  );
+  const rows = sortedMembers.map(member => {
+    const row = {
+      [MEMBER_UPDATE_ID_HEADER]: String(member.id),
+      [MEMBER_UPDATE_FIRST_NAME_HEADER]: member.prenom || '',
+      [MEMBER_UPDATE_LAST_NAME_HEADER]: member.nom || '',
+    };
+    extraKeys.forEach(key => {
+      row[key] = member.extra && member.extra[key] != null ? String(member.extra[key]) : '';
+    });
+    return row;
+  });
+  try {
+    const worksheet = XLSX.utils.json_to_sheet(rows);
+    worksheet['!cols'] = Object.keys(rows[0]).map((header, index) => ({
+      wch: index === 0 ? 1 : Math.min(Math.max(header.length + 3, 14), 42),
+      hidden: index === 0,
+    }));
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, 'Mise à jour');
+    XLSX.writeFile(workbook, `carnet-sgm-mise-a-jour-membres-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    showToast('Fichier de mise à jour généré');
+  } catch (error) {
+    console.error('Carnet SGM — impossible de générer le fichier de mise à jour:', error);
+    showToast('Impossible de générer le fichier Excel de mise à jour');
+  }
+}
+
+function readMemberUpdateFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = event => {
+      try {
+        const workbook = XLSX.read(event.target.result, { type: 'array' });
+        const sheetName = workbook.SheetNames.includes('Mise à jour')
+          ? 'Mise à jour'
+          : workbook.SheetNames[0];
+        const sheet = workbook.Sheets[sheetName];
+        if (!sheet) throw new Error('Aucune feuille trouvée dans le fichier.');
+        const matrix = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: true });
+        if (!matrix.length) throw new Error('La feuille est vide.');
+        const headers = matrix[0].map(value => String(value ?? '').trim());
+        const rows = matrix.slice(1).map(row => headers.map((header, index) => {
+          const value = row[index];
+          return isBirthDateHeader(header) ? formatImportedBirthDate(value) : value;
+        }));
+        resolve({ headers, rows });
+      } catch (error) {
+        reject(error);
+      }
+    };
+    reader.onerror = () => reject(reader.error || new Error('Lecture du fichier impossible.'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+async function handleMemberUpdateFile(file) {
+  if (!file) return;
+  if (isPresidentReadOnly()) {
+    showToast('Votre compte est en lecture seule');
+    return;
+  }
+  try {
+    const { headers, rows } = await readMemberUpdateFile(file);
+    const validation = validateMemberUpdateRows(headers, rows, state.data.membres);
+    if (validation.errors.length) {
+      showToast(validation.errors.slice(0, 2).join(' '));
+      if (validation.errors.length > 2) {
+        console.error('Carnet SGM — erreurs de validation du fichier de mise à jour:', validation.errors);
+      }
+      return;
+    }
+
+    const fieldList = validation.fieldHeaders.join(', ');
+    openConfirm(
+      'Confirmer la mise à jour des membres ?',
+      `${validation.updates.length} membre(s) reconnu(s). Informations concernées : ${fieldList}. Les cellules vides conserveront les valeurs déjà enregistrées. Aucun nouveau membre ne sera créé.`,
+      async () => {
+        if (isPresidentReadOnly()) {
+          showToast('Votre compte est en lecture seule');
+          return;
+        }
+        validation.updates.forEach(({ member, row }) => {
+          member.extra = mergeMemberUpdateExtra(member, row, headers, validation.fieldHeaders);
+        });
+        if (!await saveData()) return;
+        showToast(`${validation.updates.length} membre(s) mis à jour`);
+        render();
+      },
+      'Appliquer les mises à jour'
+    );
+  } catch (error) {
+    console.error('Carnet SGM — impossible de lire le fichier de mise à jour:', error);
+    showToast('Impossible de lire ce fichier Excel');
+  }
+}
+
 function renderImportPreviewTable() {
   const previewRows = state.importRows.slice(0, 8);
   if (!previewRows.length) return '';

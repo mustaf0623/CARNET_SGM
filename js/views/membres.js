@@ -170,6 +170,17 @@ function renderMembres() {
       ${renderImportZone()}
     </div>`}
 
+    ${readOnly ? '' : `<div class="card" style="margin-top:16px;">
+      <h3 class="card-title">Mettre à jour les informations en lot</h3>
+      <div class="card-sub">Exportez la liste complète des membres, complétez ou ajoutez des colonnes, puis réimportez le fichier pour mettre à jour leurs fiches sans créer de doublons.</div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:12px;">
+        <button class="btn btn-primary btn-sm" id="exportMemberUpdateBtn" type="button">Exporter le fichier de mise à jour</button>
+        <button class="btn btn-ghost btn-sm" id="selectMemberUpdateFileBtn" type="button">Réimporter le fichier complété</button>
+        <input type="file" id="memberUpdateFileInput" accept=".xlsx,.xls" style="display:none;">
+      </div>
+      <div class="card-sub" style="margin-top:8px;">La colonne d’identifiant est masquée. Ne modifiez pas les noms : ils vérifient la correspondance. Une cellule vide conserve la valeur actuelle. Les nouveaux en-têtes sont ajoutés comme informations complémentaires.</div>
+    </div>`}
+
     <div class="card" style="margin-top:16px;">
       <h3 class="card-title">${readOnly ? 'Membres de la portée autorisée' : 'Tous les membres'}</h3>
       <div class="card-sub">Combinez la recherche et plusieurs critères à la fois (par ex. deux catégories ET un programme ET un statut) pour une recherche croisée.</div>
@@ -558,6 +569,20 @@ function attachMembresEvents() {
     XLSX.writeFile(wb, `carnet-sgm-export-membres-${new Date().toISOString().slice(0, 10)}.xlsx`);
     showToast('Export Excel généré');
   });
+
+  const exportMemberUpdateBtn = document.getElementById('exportMemberUpdateBtn');
+  if (exportMemberUpdateBtn) exportMemberUpdateBtn.addEventListener('click', exportMemberUpdateWorkbook);
+  const selectMemberUpdateFileBtn = document.getElementById('selectMemberUpdateFileBtn');
+  const memberUpdateFileInput = document.getElementById('memberUpdateFileInput');
+  if (selectMemberUpdateFileBtn && memberUpdateFileInput) {
+    selectMemberUpdateFileBtn.addEventListener('click', () => {
+      memberUpdateFileInput.value = '';
+      memberUpdateFileInput.click();
+    });
+    memberUpdateFileInput.addEventListener('change', event => {
+      handleMemberUpdateFile(event.target.files[0]);
+    });
+  }
 
   const exportPdfBtn = document.getElementById('exportPdfBtn');
   if (exportPdfBtn) exportPdfBtn.addEventListener('click', () => {

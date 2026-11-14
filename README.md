@@ -60,6 +60,13 @@ protection contre l'enregistrement de deux pointages identiques pour une même s
 Pour le module Bureau, réexécuter également `bureau-setup.sql` afin d'ajouter les colonnes
 utilisées pour les réunions et les procès-verbaux.
 
+Dans l’onglet Membres, le fichier « Mise à jour » permet d’exporter toute la liste avec ses
+identifiants, puis de réimporter les informations complémentaires modifiées ou de nouvelles
+colonnes. L’identifiant ainsi que les prénom et nom servent à vérifier les correspondances; une
+ligne mal associée bloque l’import. L’identifiant est masqué pour éviter les modifications
+accidentelles. Les cellules vides conservent les valeurs déjà enregistrées et l’import ne crée
+jamais de membres.
+
 ## Continuité hors-ligne et expiration de session
 
 `getSupabaseUser()` (dans `js/data/sync.js`) borne la vérification de session
