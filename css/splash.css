@@ -2,32 +2,117 @@
 
 /* ===================== SPLASH ===================== */
 #splash{
-  position:fixed; inset:0; z-index:999;
+  position:fixed; inset:0; z-index:999; overflow:hidden;
   background:radial-gradient(900px 500px at 20% 0%, #1E2A4D 0%, var(--cover-bg) 60%);
   display:flex; align-items:center; justify-content:center; flex-direction:column;
   transition:opacity 0.6s ease, visibility 0.6s;
 }
 #splash.hide{ opacity:0; visibility:hidden; pointer-events:none; }
+
+/* ---- Aurore d'encre : grandes taches de couleur qui diffusent lentement
+   en arrière-plan, comme de l'encre qui se répand dans l'eau ---- */
+.splash-aurora{ position:absolute; inset:0; z-index:0; }
+.splash-aurora span{
+  position:absolute; border-radius:50%; filter:blur(60px); opacity:0.35;
+  animation:auroraDrift 14s ease-in-out infinite;
+}
+.splash-aurora span:nth-child(1){
+  width:360px;height:360px; left:-80px; top:-60px;
+  background:radial-gradient(circle, var(--emerald) 0%, transparent 70%);
+  animation-duration:16s;
+}
+.splash-aurora span:nth-child(2){
+  width:300px;height:300px; right:-70px; top:30%;
+  background:radial-gradient(circle, var(--gold) 0%, transparent 70%);
+  animation-duration:19s; animation-delay:-4s;
+}
+.splash-aurora span:nth-child(3){
+  width:320px;height:320px; left:18%; bottom:-120px;
+  background:radial-gradient(circle, var(--terracotta) 0%, transparent 70%);
+  animation-duration:21s; animation-delay:-9s;
+}
+@keyframes auroraDrift{
+  0%,100%{ transform:translate(0,0) scale(1); }
+  33%{ transform:translate(26px,18px) scale(1.12); }
+  66%{ transform:translate(-18px,-14px) scale(0.94); }
+}
+
+/* ---- Particules : fines gouttes d'encre qui montent doucement, comme des
+   lucioles — pure décoration, en arrière-plan du contenu ---- */
+.splash-specks{ position:absolute; inset:0; z-index:1; }
+.splash-specks i{
+  position:absolute; bottom:-10px; width:4px; height:4px; border-radius:50%;
+  background:var(--gold); opacity:0;
+  box-shadow:0 0 6px 1px rgba(169,121,30,0.7);
+  animation:speckRise 7s ease-in infinite;
+}
+.splash-specks i:nth-child(1){ left:8%;  animation-delay:0.2s;  animation-duration:6.5s; }
+.splash-specks i:nth-child(2){ left:18%; animation-delay:2.1s;  animation-duration:7.5s; background:var(--cover-ink); box-shadow:0 0 6px 1px rgba(241,236,222,0.5); }
+.splash-specks i:nth-child(3){ left:29%; animation-delay:0.9s;  animation-duration:8s; }
+.splash-specks i:nth-child(4){ left:41%; animation-delay:3.4s;  animation-duration:6.8s; background:var(--emerald); box-shadow:0 0 6px 1px rgba(79,107,77,0.6); }
+.splash-specks i:nth-child(5){ left:55%; animation-delay:1.6s;  animation-duration:7.2s; }
+.splash-specks i:nth-child(6){ left:66%; animation-delay:4.2s;  animation-duration:7.8s; background:var(--cover-ink); box-shadow:0 0 6px 1px rgba(241,236,222,0.5); }
+.splash-specks i:nth-child(7){ left:74%; animation-delay:0.4s;  animation-duration:6.2s; }
+.splash-specks i:nth-child(8){ left:84%; animation-delay:2.8s;  animation-duration:8.4s; background:var(--emerald); box-shadow:0 0 6px 1px rgba(79,107,77,0.6); }
+.splash-specks i:nth-child(9){ left:92%; animation-delay:1.1s;  animation-duration:7s; }
+.splash-specks i:nth-child(10){left:48%; animation-delay:5s;    animation-duration:6.6s; }
+@keyframes speckRise{
+  0%{ transform:translateY(0) scale(0.6); opacity:0; }
+  12%{ opacity:0.9; }
+  85%{ opacity:0.5; }
+  100%{ transform:translateY(-380px) scale(1); opacity:0; }
+}
+
+/* ---- Icône : apparition en pop, puis légère respiration continue,
+   et le trait d'encre sous le stylo se "dessine" comme s'il venait d'être
+   écrit (stroke-dasharray). ---- */
 .splash-mark{
+  position:relative; z-index:2;
   width:88px;height:88px;border-radius:22px;
   background:linear-gradient(155deg, var(--emerald) 0%, var(--emerald-dim) 100%);
   display:flex;align-items:center;justify-content:center;
   box-shadow:0 20px 46px -14px rgba(15,158,110,0.55);
-  animation:splashPop 0.7s cubic-bezier(.2,.8,.3,1) both;
+  animation:splashPop 0.7s cubic-bezier(.2,.8,.3,1) both,
+            splashBreathe 2.6s 1.1s ease-in-out infinite;
 }
-.splash-mark svg{ width:44px;height:44px; }
+.splash-mark svg{ width:44px;height:44px; overflow:visible; }
 @keyframes splashPop{ from{opacity:0; transform:scale(0.7);} to{opacity:1; transform:scale(1);} }
+@keyframes splashBreathe{
+  0%,100%{ box-shadow:0 20px 46px -14px rgba(15,158,110,0.55); transform:scale(1); }
+  50%{ box-shadow:0 22px 54px -12px rgba(15,158,110,0.75); transform:scale(1.035); }
+}
+.pen-body, .pen-glint{ animation:splashPop 0.5s 0.05s cubic-bezier(.2,.8,.3,1) both; }
+.pen-ink{
+  stroke-dasharray:20; stroke-dashoffset:20;
+  animation:inkWrite 0.6s 0.45s cubic-bezier(.3,.7,.3,1) forwards;
+}
+@keyframes inkWrite{ to{ stroke-dashoffset:0; } }
+
 .splash-title{
+  position:relative; z-index:2; overflow:hidden;
   font-family:'Fraunces',serif; font-weight:600; font-size:30px; color:var(--cover-ink);
   margin-top:22px; letter-spacing:-0.01em;
   animation:splashRise 0.7s 0.15s cubic-bezier(.2,.8,.3,1) both;
 }
+.splash-title::after{
+  content:''; position:absolute; inset:0; left:-60%; width:40%;
+  background:linear-gradient(100deg, transparent, rgba(169,121,30,0.55), transparent);
+  animation:splashShine 0.5s 0.8s ease-out both;
+}
+@keyframes splashShine{ to{ left:120%; } }
 .splash-sub{
+  position:relative; z-index:2;
   font-family:'IBM Plex Mono', monospace; font-size:11.5px; letter-spacing:0.16em; text-transform:uppercase;
   color:var(--gold); margin-top:10px;
   animation:splashRise 0.7s 0.28s cubic-bezier(.2,.8,.3,1) both;
 }
 @keyframes splashRise{ from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:none;} }
-.splash-bar{ width:120px; height:2px; background:var(--cover-line-strong); margin-top:26px; border-radius:2px; overflow:hidden; }
-.splash-bar-fill{ height:100%; width:0%; background:var(--emerald); animation:splashLoad 1.1s 0.3s cubic-bezier(.3,.6,.4,1) forwards; }
+.splash-bar{ position:relative; z-index:2; width:120px; height:2px; background:var(--cover-line-strong); margin-top:26px; border-radius:2px; overflow:hidden; }
+.splash-bar-fill{ position:relative; height:100%; width:0%; background:var(--emerald); animation:splashLoad 0.9s 0.3s cubic-bezier(.3,.6,.4,1) forwards; }
+.splash-bar-fill::after{
+  content:''; position:absolute; inset:0;
+  background:linear-gradient(90deg, transparent, rgba(241,236,222,0.6), transparent);
+  animation:splashBarShine 0.9s 0.3s ease-out infinite;
+}
 @keyframes splashLoad{ to{ width:100%; } }
+@keyframes splashBarShine{ from{ transform:translateX(-120px);} to{ transform:translateX(120px);} }
