@@ -72,8 +72,8 @@
   background:linear-gradient(155deg, var(--emerald) 0%, var(--emerald-dim) 100%);
   display:flex;align-items:center;justify-content:center;
   box-shadow:0 20px 46px -14px rgba(15,158,110,0.55);
-  animation:splashPop 0.7s cubic-bezier(.2,.8,.3,1) both,
-            splashBreathe 2.6s 1.1s ease-in-out infinite;
+  animation:splashPop 0.1s cubic-bezier(.2,.8,.3,1) both,
+            splashBreathe 2.9s 1.1s ease-in-out infinite;
 }
 .splash-mark svg{ width:44px;height:44px; overflow:visible; }
 @keyframes splashPop{ from{opacity:0; transform:scale(0.7);} to{opacity:1; transform:scale(1);} }
