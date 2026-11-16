@@ -26,27 +26,45 @@ function memberNameSimilarity(first, second) {
   const union = firstTrigrams.size + secondTrigrams.size - intersection;
   return union ? intersection / union : 0;
 }
-function matchingMemberExtraFields(incomingExtra, existingExtra) {
-  const existing = new Map(Object.entries(existingExtra || {})
-    .map(([key, value]) => [normalizeMemberName(key), normalizeMemberName(value)]));
-  return Object.entries(incomingExtra || {}).reduce((matches, [key, value]) => {
-    const normalizedKey = normalizeMemberName(key);
-    const normalizedValue = normalizeMemberName(value);
-    if (normalizedKey && normalizedValue && existing.has(normalizedKey) && existing.get(normalizedKey) === normalizedValue) {
-      matches.push({ key, value: String(value) });
-    }
-    return matches;
-  }, []);
+function compareMemberExtraFields(incomingExtra, existingExtra) {
+  const normalizeFields = extra => Object.entries(extra || {})
+    .map(([key, value]) => ({
+      key,
+      normalizedKey: normalizeMemberName(key),
+      value: String(value == null ? '' : value),
+      normalizedValue: normalizeMemberName(value),
+    }))
+    .filter(field => field.normalizedKey && field.normalizedValue);
+  const incoming = normalizeFields(incomingExtra);
+  const existing = normalizeFields(existingExtra);
+  const matchedExtraFields = [];
+  const conflictingExtraFields = [];
+  incoming.forEach(incomingField => {
+    existing.filter(existingField => existingField.normalizedKey === incomingField.normalizedKey)
+      .forEach(existingField => {
+        if (existingField.normalizedValue === incomingField.normalizedValue) {
+          matchedExtraFields.push({ key: incomingField.key, value: incomingField.value });
+        } else {
+          conflictingExtraFields.push({
+            key: incomingField.key,
+            incomingValue: incomingField.value,
+            existingValue: existingField.value,
+          });
+        }
+      });
+  });
+  return { matchedExtraFields, conflictingExtraFields };
 }
 function compareMemberForDuplicate(member, candidate) {
   const { prenom, nom, extra, sexe, categorie } = candidate;
   if (!normalizeMemberName(prenom) || !normalizeMemberName(nom)) return null;
-  const matchedExtraFields = matchingMemberExtraFields(extra, member.extra);
+  const { matchedExtraFields, conflictingExtraFields } = compareMemberExtraFields(extra, member.extra);
   const normalizedCategory = normalizeMemberName(categorie);
   const sameSex = ['H', 'F'].includes(sexe) && member.sexe === sexe;
   const sameCategory = normalizedCategory
     && normalizedCategory === normalizeMemberName(member.categorie);
-  const strongCorroboration = sameSex && sameCategory && matchedExtraFields.length > 0;
+  const strongCorroboration = sameSex && sameCategory
+    && matchedExtraFields.length > 0 && conflictingExtraFields.length === 0;
   const firstNameSimilarity = memberNameSimilarity(prenom, member.prenom);
   const lastNameSimilarity = memberNameSimilarity(nom, member.nom);
   const bothNamePartsMatch = firstNameSimilarity >= MEMBER_NAME_SIMILARITY_THRESHOLD
@@ -60,6 +78,7 @@ function compareMemberForDuplicate(member, candidate) {
   return {
     member,
     matchedExtraFields,
+    conflictingExtraFields,
     strongDuplicate: !!strongDuplicate,
   };
 }
@@ -726,14 +745,17 @@ function attachMembresEvents() {
         const matchingFields = match.matchedExtraFields.length
           ? ` — information correspondante : ${match.matchedExtraFields.map(field => field.key).join(', ')}`
           : '';
-        return `${member.prenom} ${member.nom} — ${details}${matchingFields}`;
+        const conflictingFields = match.conflictingExtraFields.length
+          ? ` — informations différentes : ${match.conflictingExtraFields.map(field => `${field.key} (saisi : ${field.incomingValue}, fiche : ${field.existingValue})`).join(', ')}`
+          : '';
+        return `${member.prenom} ${member.nom} — ${details}${matchingFields}${conflictingFields}`;
       };
       const confirmedDuplicates = matchingMembers.filter(match => match.strongDuplicate);
       const candidates = matchingMembers.map(describeMember).join('\n');
       if (confirmedDuplicates.length) {
         openConfirm(
           'Ajout bloqué — doublon probable',
-          `Un membre avec un prénom et un nom ressemblants a le même sexe, la même catégorie et une information complémentaire identique. Aucun ajout n’a été effectué :\n${confirmedDuplicates.map(describeMember).join('\n')}`,
+          `Un membre avec un prénom et un nom ressemblants a le même sexe, la même catégorie, une information complémentaire identique et aucune information commune différente. Aucun ajout n’a été effectué :\n${confirmedDuplicates.map(describeMember).join('\n')}`,
           () => {},
           'Fermer'
         );
@@ -741,7 +763,7 @@ function attachMembresEvents() {
       }
       openConfirm(
         'Homonyme possible',
-        `Des membres ont un prénom et un nom ressemblants :\n${candidates}\n\nLa combinaison du sexe, de la catégorie et d’une information complémentaire ne confirme pas un doublon. Annulez si c’est la même personne; confirmez pour ajouter cet homonyme.`,
+        `Des membres ont un prénom et un nom ressemblants :\n${candidates}\n\nLa combinaison des informations ne confirme pas un doublon automatique. Annulez si c’est la même personne; confirmez pour ajouter cet homonyme.`,
         addMember,
         'Ajouter comme homonyme'
       );

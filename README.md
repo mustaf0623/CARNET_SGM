@@ -61,7 +61,9 @@ Pour protéger aussi la table des membres côté base, exécuter une fois
 `supabase-member-duplicate-guard.sql` dans le SQL Editor après `supabase-setup.sql`. Le trigger
 bloque une écriture si le prénom ressemble au prénom et le nom au nom (seuil de 0,55 pour chacun,
 sans inverser leur ordre), que le sexe et la catégorie non vide correspondent et qu'au moins une
-information complémentaire non vide correspond dans le même champ.
+information complémentaire non vide correspond dans le même champ, sans qu'aucun autre champ
+complémentaire partagé diffère. En cas de valeurs contradictoires, l'application affiche le candidat
+pour vérification au lieu de bloquer automatiquement.
 À l'ajout manuel et à l'import, le sexe et la catégorie doivent être renseignés; l'import refuse
 également les valeurs de sexe ou de catégorie non reconnues.
 L'application signale également les membres candidats avant l'enregistrement; les ressemblances qui

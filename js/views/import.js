@@ -411,10 +411,13 @@ function renderImportDuplicateReview() {
     const matchingFields = match.matchedExtraFields.length
       ? `<div style="font-size:11.5px;color:var(--terracotta-dim);margin-top:3px;">Informations identiques : ${match.matchedExtraFields.map(field => `${escapeHtml(field.key)} (${escapeHtml(field.value)})`).join(', ')}</div>`
       : '';
-    return `<li>${escapeHtml(source)} — ${escapeHtml(member.prenom)} ${escapeHtml(member.nom)} (${escapeHtml(details)})${matchingFields}</li>`;
+    const conflictingFields = match.conflictingExtraFields.length
+      ? `<div style="font-size:11.5px;color:var(--terracotta-dim);margin-top:3px;">Informations différentes : ${match.conflictingExtraFields.map(field => `${escapeHtml(field.key)} (${escapeHtml(field.incomingValue)} / ${escapeHtml(field.existingValue)})`).join(', ')}</div>`
+      : '';
+    return `<li>${escapeHtml(source)} — ${escapeHtml(member.prenom)} ${escapeHtml(member.nom)} (${escapeHtml(details)})${matchingFields}${conflictingFields}</li>`;
   };
   return `<div>
-    <p style="font-size:13px;color:var(--ink-dim);margin-bottom:14px;">Un doublon est bloqué si le prénom ressemble au prénom et le nom au nom (seuil de 0,55 chacun), que le sexe et la catégorie correspondent et qu’au moins une information complémentaire non vide correspond dans le même champ. Les ressemblances partielles nécessitent votre décision.</p>
+    <p style="font-size:13px;color:var(--ink-dim);margin-bottom:14px;">Un doublon est bloqué si le prénom et le nom ressemblent chacun au même champ, que le sexe et la catégorie correspondent, qu’au moins une information complémentaire non vide est identique dans le même champ et qu’aucune information partagée ne diffère. Sinon, vérifiez le candidat.</p>
     <div style="display:grid;gap:12px;max-height:50vh;overflow:auto;">
       ${duplicates.map(duplicate => `<div class="card import-duplicate-review-row" data-row-index="${duplicate.rowIndex}" data-hard-duplicate="${duplicate.hardDuplicate}" style="padding:12px;">
         <strong>Ligne ${duplicate.rowIndex + 2} : ${escapeHtml(duplicate.prenom)} ${escapeHtml(duplicate.nom)}</strong>
@@ -422,9 +425,9 @@ function renderImportDuplicateReview() {
           <ul style="margin:5px 0 0;padding-left:20px;">${duplicate.matches.map(matchLabel).join('')}</ul>
         </div>
         ${duplicate.hardDuplicate
-          ? '<p style="font-size:12px;color:var(--terracotta-dim);font-weight:700;">Ajout bloqué : nom, sexe, catégorie et information complémentaire correspondent à la fiche existante.</p>'
+          ? '<p style="font-size:12px;color:var(--terracotta-dim);font-weight:700;">Ajout bloqué : prénom, nom, sexe, catégorie et informations complémentaires concordent.</p>'
           : `${duplicate.conditionalDuplicate
-            ? '<p style="font-size:12px;color:var(--terracotta-dim);">Si la ligne correspondante est importée, cette ligne sera bloquée car les critères de nom, sexe, catégorie et information complémentaire correspondent.</p>'
+            ? '<p style="font-size:12px;color:var(--terracotta-dim);">Si la ligne correspondante est importée, cette ligne sera bloquée car les critères concordent sans information complémentaire contradictoire.</p>'
             : ''}
             <label style="display:block;font-size:12.5px;margin:6px 0;"><input type="radio" class="importDuplicateDecision" name="importDuplicate${duplicate.rowIndex}" data-row-index="${duplicate.rowIndex}" value="duplicate"> Même personne — ignorer cette ligne</label>
             <label style="display:block;font-size:12.5px;"><input type="radio" class="importDuplicateDecision" name="importDuplicate${duplicate.rowIndex}" data-row-index="${duplicate.rowIndex}" value="homonym"> Homonyme — importer cette ligne</label>`}
