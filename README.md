@@ -57,6 +57,13 @@ prise dès qu'on est en ligne, avec repli sur le cache hors-ligne.
 Après une modification du schéma Supabase, réexécuter `supabase-setup.sql` dans le SQL Editor
 du projet avant de déployer l'application. Le script est rejouable et ajoute notamment la
 protection contre l'enregistrement de deux pointages identiques pour une même séance.
+Pour protéger aussi la table des membres côté base, exécuter une fois
+`supabase-member-duplicate-guard.sql` dans le SQL Editor après `supabase-setup.sql`. Le trigger
+bloque une écriture quand la similarité du nom atteint 0,55 et qu'au moins une information
+complémentaire non vide correspond dans le même champ. L'application signale également le membre
+candidat avant l'enregistrement; les homonymes sans information complémentaire commune restent
+confirmables. Le contrôle utilise un verrou transactionnel afin d'éviter que deux inscriptions
+concurrentes échappent à la vérification.
 Pour le module Bureau, réexécuter également `bureau-setup.sql` afin d'ajouter les colonnes
 utilisées pour les réunions et les procès-verbaux.
 

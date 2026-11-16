@@ -10,7 +10,7 @@ function normalizeMemberUpdateHeader(value) {
 }
 
 function normalizeMemberUpdateName(value) {
-  return normalizeMemberUpdateHeader(value);
+  return normalizeMemberName(value);
 }
 
 function memberUpdateReservedHeaders() {
@@ -283,6 +283,7 @@ function renderImportZone() {
       </div>
     </div>`;
   }
+  if (state.importStep === 2) return renderImportDuplicateReview();
   return '';
 }
 
@@ -314,6 +315,90 @@ function formatImportedBirthDate(value) {
   if (!date) return value;
   return [String(date.d).padStart(2, '0'), String(date.m).padStart(2, '0'), date.y].join('/');
 }
+function importedMemberNames(row, map) {
+  return {
+    prenom: String((map.prenom ? row[map.prenom] : '') || '').trim(),
+    nom: String((map.nom ? row[map.nom] : '') || '').trim(),
+  };
+}
+function importedMemberFromRow(row, map, mappedHeaders) {
+  const { prenom, nom } = importedMemberNames(row, map);
+  if (!prenom && !nom) return null;
+  const sexeRaw = String((map.sexe ? row[map.sexe] : '') || '').trim().toLowerCase();
+  const extra = {};
+  Object.keys(row).forEach(header => {
+    if (mappedHeaders.has(header)) return;
+    const value = row[header];
+    extra[header] = value === undefined || value === null ? '' : String(value).trim();
+  });
+  return {
+    prenom,
+    nom,
+    sexe: ['f', 'femme', 'female', 'w'].includes(sexeRaw) ? 'F' : 'H',
+    categorie: normaliseCategorie(map.categorie ? row[map.categorie] : ''),
+    extra,
+  };
+}
+function findImportDuplicateRows(rows, map, members) {
+  const mappedHeaders = new Set(Object.values(map).filter(Boolean));
+  const candidates = members.map(member => ({ type: 'existing', member }));
+  const duplicates = [];
+  rows.forEach((row, rowIndex) => {
+    const member = importedMemberFromRow(row, map, mappedHeaders);
+    if (!member) return;
+    const matches = candidates.map(candidate => {
+      const match = compareMemberForDuplicate(candidate.member, member.prenom, member.nom, member.extra);
+      return match ? { ...candidate, ...match } : null;
+    }).filter(Boolean);
+    if (matches.length) {
+      duplicates.push({
+        rowIndex,
+        prenom: member.prenom,
+        nom: member.nom,
+        matches,
+        hardDuplicate: matches.some(match => match.type === 'existing' && match.matchedExtraFields.length > 0),
+        conditionalDuplicate: matches.some(match => match.type === 'file' && match.matchedExtraFields.length > 0),
+      });
+    }
+    candidates.push({ type: 'file', rowIndex, member });
+  });
+  return duplicates;
+}
+function renderImportDuplicateReview() {
+  const duplicates = findImportDuplicateRows(state.importRows, state.importMapping, state.data.membres);
+  const requiresReview = duplicates.some(duplicate => !duplicate.hardDuplicate);
+  const matchLabel = match => {
+    const member = match.member;
+    const source = match.type === 'existing' ? 'Base existante' : `Ligne ${match.rowIndex + 2} du fichier`;
+    const details = `${member.sexe === 'H' ? 'Homme' : 'Femme'}, ${member.categorie || 'catégorie non définie'}, ${member.ap ? 'ponctuel (AP)' : 'permanent'}`;
+    const matchingFields = match.matchedExtraFields.length
+      ? `<div style="font-size:11.5px;color:var(--terracotta-dim);margin-top:3px;">Informations identiques : ${match.matchedExtraFields.map(field => `${escapeHtml(field.key)} (${escapeHtml(field.value)})`).join(', ')}</div>`
+      : '';
+    return `<li>${escapeHtml(source)} — ${escapeHtml(member.prenom)} ${escapeHtml(member.nom)} (${escapeHtml(details)})${matchingFields}</li>`;
+  };
+  return `<div>
+    <p style="font-size:13px;color:var(--ink-dim);margin-bottom:14px;">Les noms proches sont signalés. Si une information complémentaire du même champ correspond, la ligne est bloquée; sinon, confirmez s’il s’agit d’un doublon ou d’un homonyme.</p>
+    <div style="display:grid;gap:12px;max-height:50vh;overflow:auto;">
+      ${duplicates.map(duplicate => `<div class="card import-duplicate-review-row" data-row-index="${duplicate.rowIndex}" data-hard-duplicate="${duplicate.hardDuplicate}" style="padding:12px;">
+        <strong>Ligne ${duplicate.rowIndex + 2} : ${escapeHtml(duplicate.prenom)} ${escapeHtml(duplicate.nom)}</strong>
+        <div style="font-size:12px;color:var(--ink-faint);margin:7px 0 10px;">Correspondances possibles :
+          <ul style="margin:5px 0 0;padding-left:20px;">${duplicate.matches.map(matchLabel).join('')}</ul>
+        </div>
+        ${duplicate.hardDuplicate
+          ? '<p style="font-size:12px;color:var(--terracotta-dim);font-weight:700;">Ajout bloqué : une information complémentaire correspond à la fiche existante.</p>'
+          : `${duplicate.conditionalDuplicate
+            ? '<p style="font-size:12px;color:var(--terracotta-dim);">Si la ligne correspondante est importée, cette ligne sera bloquée car une information complémentaire correspond.</p>'
+            : ''}
+            <label style="display:block;font-size:12.5px;margin:6px 0;"><input type="radio" class="importDuplicateDecision" name="importDuplicate${duplicate.rowIndex}" data-row-index="${duplicate.rowIndex}" value="duplicate"> Même personne — ignorer cette ligne</label>
+            <label style="display:block;font-size:12.5px;"><input type="radio" class="importDuplicateDecision" name="importDuplicate${duplicate.rowIndex}" data-row-index="${duplicate.rowIndex}" value="homonym"> Homonyme — importer cette ligne</label>`}
+      </div>`).join('')}
+    </div>
+    <div style="display:flex;gap:10px;margin-top:14px;">
+      <button class="btn btn-primary" id="confirmImportDuplicatesBtn" ${requiresReview ? 'disabled' : ''}>Confirmer l’import</button>
+      <button class="btn btn-ghost" id="backToImportMappingBtn">Retour</button>
+    </div>
+  </div>`;
+}
 function handleFile(e) {
   const file = e.target.files[0];
   if (!file) return;
@@ -342,28 +427,50 @@ function handleFile(e) {
 async function confirmImport() {
   const d = state.data;
   const map = state.importMapping;
+  const duplicates = findImportDuplicateRows(state.importRows, map, d.membres);
+  if (state.importStep === 1 && duplicates.length) {
+    state.importStep = 2;
+    render();
+    return;
+  }
+  const skippedRows = new Set();
+  if (state.importStep === 2) {
+    duplicates.filter(duplicate => duplicate.hardDuplicate)
+      .forEach(duplicate => skippedRows.add(duplicate.rowIndex));
+    const decisions = new Map(Array.from(document.querySelectorAll('.importDuplicateDecision:checked'))
+      .map(input => [Number(input.dataset.rowIndex), input.value]));
+    const reviewableDuplicates = duplicates.filter(duplicate => !duplicate.hardDuplicate);
+    if (decisions.size !== reviewableDuplicates.length) {
+      showToast('Examinez chaque correspondance avant de confirmer l’import');
+      return;
+    }
+    decisions.forEach((decision, rowIndex) => {
+      if (decision === 'duplicate') skippedRows.add(rowIndex);
+    });
+  }
   const mappedHeaders = new Set(Object.values(map).filter(Boolean));
   let created = 0;
+  const blockedRows = new Set();
 
-  state.importRows.forEach(row => {
-    const prenom = (map.prenom ? row[map.prenom] : '') || '';
-    const nom = (map.nom ? row[map.nom] : '') || '';
-    if (!nom && !prenom) return;
-    let sexeRaw = (map.sexe ? String(row[map.sexe]) : '').trim().toLowerCase();
-    const sexe = ['f', 'femme', 'female', 'w'].includes(sexeRaw) ? 'F' : 'H';
-    const categorie = normaliseCategorie(map.categorie ? row[map.categorie] : '');
-    const extra = {};
-    Object.keys(row).forEach(h => {
-      if (mappedHeaders.has(h)) return;
-      const v = row[h];
-      extra[h] = v === undefined || v === null ? '' : String(v).trim();
-    });
-    d.membres.push({ id: uid(), nom: String(nom).trim(), prenom: String(prenom).trim(), sexe, categorie, programmeIds: [], allProgrammes: true, extra });
+  state.importRows.forEach((row, rowIndex) => {
+    if (skippedRows.has(rowIndex)) return;
+    const member = importedMemberFromRow(row, map, mappedHeaders);
+    if (!member) return;
+    const confirmedDuplicate = findSimilarMembers(d.membres, member.prenom, member.nom, member.extra)
+      .find(match => match.matchedExtraFields.length);
+    if (confirmedDuplicate) {
+      blockedRows.add(rowIndex);
+      return;
+    }
+    d.membres.push({ id: uid(), nom: member.nom, prenom: member.prenom, sexe: member.sexe, categorie: member.categorie, programmeIds: [], allProgrammes: true, extra: member.extra });
     created++;
   });
 
   await saveData();
   state.importStep = 0; state.importRows = []; state.importHeaders = []; state.importMapping = {};
-  showToast(created + ' membre(s) importé(s) — pointables dans tous les programmes');
+  const skippedCount = skippedRows.size + blockedRows.size;
+  showToast(skippedCount
+    ? `${created} membre(s) importé(s), ${skippedCount} doublon(s) ignoré(s)`
+    : created + ' membre(s) importé(s) — pointables dans tous les programmes');
   render();
 }

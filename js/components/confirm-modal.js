@@ -18,7 +18,7 @@ function renderConfirmModal() {
         <svg viewBox="0 0 24 24" fill="none" stroke="#FFF5EE" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M9 7V5a1 1 0 011-1h4a1 1 0 011 1v2m2 0v13a1 1 0 01-1 1H8a1 1 0 01-1-1V7h10z"/></svg>
       </div>
       <h2>${escapeHtml(state.confirmTitle)}</h2>
-      <p>${escapeHtml(state.confirmMessage)}</p>
+      <p style="white-space:pre-line;">${escapeHtml(state.confirmMessage)}</p>
       <button class="btn" id="confirmYesBtn" style="width:100%;justify-content:center;margin-bottom:10px;background:var(--terracotta);border-color:transparent;color:#fff;">${escapeHtml(state.confirmLabel)}</button>
       <button class="btn btn-ghost" id="confirmNoBtn" style="width:100%;justify-content:center;">Annuler</button>
     </div>

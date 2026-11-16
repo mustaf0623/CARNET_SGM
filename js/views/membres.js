@@ -1,6 +1,56 @@
 /* js/views/membres.js — Onglet Membres (liste, ajout, filtres, export) */
 
 /* ================= MEMBRES ================= */
+const MEMBER_NAME_SIMILARITY_THRESHOLD = 0.55;
+function normalizeMemberName(value) {
+  return String(value == null ? '' : value).toLowerCase().normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '').trim().replace(/\s+/g, ' ');
+}
+function memberNameTrigrams(value) {
+  const trigrams = new Set();
+  normalizeMemberName(value).split(/[^\p{L}\p{N}]+/u).filter(Boolean).forEach(word => {
+    const padded = `  ${word} `;
+    for (let index = 0; index <= padded.length - 3; index++) trigrams.add(padded.slice(index, index + 3));
+  });
+  return trigrams;
+}
+function memberNameSimilarity(first, second) {
+  const normalizedFirst = normalizeMemberName(first);
+  const normalizedSecond = normalizeMemberName(second);
+  if (!normalizedFirst || !normalizedSecond) return 0;
+  if (normalizedFirst === normalizedSecond) return 1;
+  const firstTrigrams = memberNameTrigrams(normalizedFirst);
+  const secondTrigrams = memberNameTrigrams(normalizedSecond);
+  let intersection = 0;
+  firstTrigrams.forEach(trigram => { if (secondTrigrams.has(trigram)) intersection++; });
+  const union = firstTrigrams.size + secondTrigrams.size - intersection;
+  return union ? intersection / union : 0;
+}
+function matchingMemberExtraFields(incomingExtra, existingExtra) {
+  const existing = new Map(Object.entries(existingExtra || {})
+    .map(([key, value]) => [normalizeMemberName(key), normalizeMemberName(value)]));
+  return Object.entries(incomingExtra || {}).reduce((matches, [key, value]) => {
+    const normalizedKey = normalizeMemberName(key);
+    const normalizedValue = normalizeMemberName(value);
+    if (normalizedKey && normalizedValue && existing.has(normalizedKey) && existing.get(normalizedKey) === normalizedValue) {
+      matches.push({ key, value: String(value) });
+    }
+    return matches;
+  }, []);
+}
+function compareMemberForDuplicate(member, prenom, nom, extra) {
+  if (!normalizeMemberName(prenom) || !normalizeMemberName(nom)) return null;
+  const similarity = memberNameSimilarity(`${prenom} ${nom}`, `${member.prenom} ${member.nom}`);
+  if (similarity < MEMBER_NAME_SIMILARITY_THRESHOLD) return null;
+  return {
+    member,
+    similarity,
+    matchedExtraFields: matchingMemberExtraFields(extra, member.extra),
+  };
+}
+function findSimilarMembers(members, prenom, nom, extra) {
+  return members.map(member => compareMemberForDuplicate(member, prenom, nom, extra)).filter(Boolean);
+}
 function normalizeExportSearch(value) {
   return String(value || '').toLowerCase().normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '').trim();
@@ -638,8 +688,42 @@ function attachMembresEvents() {
     const membre = ap
       ? { id: uid(), nom, prenom, sexe, categorie, programmeIds: [], allProgrammes: true, ap: true, extra }
       : { id: uid(), nom, prenom, sexe, categorie, programmeIds: [], allProgrammes: true, ap: false, extra };
-    d.membres.push(membre);
-    await saveData(); showToast(ap ? 'Membre ponctuel ajouté (AP)' : 'Membre ajouté et pointable dans tous les programmes'); render();
+    const addMember = async () => {
+      d.membres.push(membre);
+      await saveData();
+      showToast(ap ? 'Membre ponctuel ajouté (AP)' : 'Membre ajouté et pointable dans tous les programmes');
+      render();
+    };
+    const matchingMembers = findSimilarMembers(d.membres, prenom, nom, extra);
+    if (matchingMembers.length) {
+      const describeMember = match => {
+        const member = match.member;
+        const details = `${member.sexe === 'H' ? 'Homme' : 'Femme'}, ${member.categorie || 'catégorie non définie'}, ${member.ap ? 'ponctuel (AP)' : 'permanent'}`;
+        const matchingFields = match.matchedExtraFields.length
+          ? ` — information correspondante : ${match.matchedExtraFields.map(field => field.key).join(', ')}`
+          : '';
+        return `${member.prenom} ${member.nom} — ${details}${matchingFields}`;
+      };
+      const confirmedDuplicates = matchingMembers.filter(match => match.matchedExtraFields.length);
+      const candidates = matchingMembers.map(describeMember).join('\n');
+      if (confirmedDuplicates.length) {
+        openConfirm(
+          'Ajout bloqué — doublon probable',
+          `Un membre au nom ressemblant possède déjà une information complémentaire identique. Aucun ajout n’a été effectué :\n${confirmedDuplicates.map(describeMember).join('\n')}`,
+          () => {},
+          'Fermer'
+        );
+        return;
+      }
+      openConfirm(
+        'Homonyme possible',
+        `Des membres ont un nom ressemblant :\n${candidates}\n\nAucune information complémentaire ne correspond. Annulez si c’est la même personne; confirmez pour ajouter cet homonyme.`,
+        addMember,
+        'Ajouter comme homonyme'
+      );
+      return;
+    }
+    await addMember();
   });
 
   const dz = document.getElementById('dropZone');
@@ -659,6 +743,21 @@ function attachMembresEvents() {
   if (confirmBtn) confirmBtn.addEventListener('click', confirmImport);
   const cancelBtn = document.getElementById('cancelImportBtn');
   if (cancelBtn) cancelBtn.addEventListener('click', () => { state.importStep = 0; render(); });
+  const confirmDuplicateImportBtn = document.getElementById('confirmImportDuplicatesBtn');
+  if (confirmDuplicateImportBtn) {
+    const updateDuplicateImportButton = () => {
+      confirmDuplicateImportBtn.disabled = Array.from(document.querySelectorAll('.import-duplicate-review-row'))
+        .some(row => row.dataset.hardDuplicate !== 'true' && !row.querySelector('.importDuplicateDecision:checked'));
+    };
+    document.querySelectorAll('.importDuplicateDecision').forEach(input =>
+      input.addEventListener('change', updateDuplicateImportButton)
+    );
+    confirmDuplicateImportBtn.addEventListener('click', confirmImport);
+    document.getElementById('backToImportMappingBtn').addEventListener('click', () => {
+      state.importStep = 1;
+      render();
+    });
+  }
 
   const emptyGo = document.getElementById('emptyGoMembres');
   if (emptyGo) emptyGo.addEventListener('click', () => { state.tab = 'membres'; render(); });

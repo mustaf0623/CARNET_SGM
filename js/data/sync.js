@@ -339,6 +339,36 @@ async function rejectDuplicateAttendance() {
   return true;
 }
 
+async function rejectDuplicateMemberWrite(error) {
+  let details;
+  try { details = JSON.parse(error.details || '{}'); }
+  catch (parseError) {
+    console.error('Carnet SGM — détails du doublon membre illisibles:', parseError);
+    return false;
+  }
+  if (!details.incomingId || !details.candidateId) return false;
+
+  const previous = snapshotMaps.membres.get(details.incomingId);
+  if (previous) {
+    const restored = JSON.parse(previous);
+    state.data.membres = state.data.membres.map(member => member.id === details.incomingId ? restored : member);
+  } else {
+    state.data.membres = state.data.membres.filter(member => member.id !== details.incomingId);
+  }
+
+  try { localStorage.setItem(LOCAL_BACKUP_KEY, JSON.stringify(state.data)); }
+  catch (e) { console.error('Carnet SGM — impossible de sauvegarder localement le rejet du membre:', e); }
+  try { await idbSet('carnet-data', state.data); }
+  catch (e) { console.error('Carnet SGM — impossible de sauvegarder localement le rejet du membre:', e); }
+  await saveSyncState(true);
+  syncQueued = true;
+  if (state.tab === 'membres') render();
+  const candidateName = escapeHtml([details.prenom, details.nom].filter(Boolean).join(' ') || 'un membre');
+  const matchingField = escapeHtml(details.field || 'information complémentaire');
+  showToast(`Ajout bloqué : ${candidateName} correspond à la fiche existante (information : ${matchingField}).`);
+  return true;
+}
+
 async function pushToSupabase() {
   if (!sb || !sbUser) return false;
   if (!state.account) return false;
@@ -395,6 +425,13 @@ async function pushToSupabase() {
     return true;
   } catch (e) {
     console.error('Carnet SGM — échec pushToSupabase:', e);
+    if (e && e.code === 'P0001' && e.message === 'CARNET_DUPLICATE_MEMBER') {
+      try {
+        if (await rejectDuplicateMemberWrite(e)) return false;
+      } catch (rejectionError) {
+        console.error('Carnet SGM — impossible de restaurer le membre rejeté:', rejectionError);
+      }
+    }
     if (e && e.code === '23505' && String(e.message || '').includes('sessions_attendance_fingerprint_key')) {
       try {
         if (await rejectDuplicateAttendance()) return 'duplicate-attendance';
