@@ -59,9 +59,9 @@ du projet avant de déployer l'application. Le script est rejouable et ajoute no
 protection contre l'enregistrement de deux pointages identiques pour une même séance.
 Pour protéger aussi la table des membres côté base, exécuter une fois
 `supabase-member-duplicate-guard.sql` dans le SQL Editor après `supabase-setup.sql`. Le trigger
-bloque une écriture si le nom complet ressemble (seuil de 0,55) ou si le prénom et le nom ressemblent
-chacun (seuil de 0,55), que le sexe et la catégorie non vide
-correspondent et qu'au moins une information complémentaire non vide correspond dans le même champ.
+bloque une écriture si le prénom ressemble au prénom et le nom au nom (seuil de 0,55 pour chacun,
+sans inverser leur ordre), que le sexe et la catégorie non vide correspondent et qu'au moins une
+information complémentaire non vide correspond dans le même champ.
 À l'ajout manuel et à l'import, le sexe et la catégorie doivent être renseignés; l'import refuse
 également les valeurs de sexe ou de catégorie non reconnues.
 L'application signale également les membres candidats avant l'enregistrement; les ressemblances qui

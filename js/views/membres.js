@@ -47,22 +47,18 @@ function compareMemberForDuplicate(member, candidate) {
   const sameCategory = normalizedCategory
     && normalizedCategory === normalizeMemberName(member.categorie);
   const strongCorroboration = sameSex && sameCategory && matchedExtraFields.length > 0;
-  const fullNameSimilarity = memberNameSimilarity(`${prenom} ${nom}`, `${member.prenom} ${member.nom}`);
   const firstNameSimilarity = memberNameSimilarity(prenom, member.prenom);
   const lastNameSimilarity = memberNameSimilarity(nom, member.nom);
-  const fullNameMatch = fullNameSimilarity >= MEMBER_NAME_SIMILARITY_THRESHOLD;
   const bothNamePartsMatch = firstNameSimilarity >= MEMBER_NAME_SIMILARITY_THRESHOLD
     && lastNameSimilarity >= MEMBER_NAME_SIMILARITY_THRESHOLD;
-  const strongNameMatch = fullNameMatch || bothNamePartsMatch;
-  const similarName = strongNameMatch || (strongCorroboration && (
+  const similarName = bothNamePartsMatch || (strongCorroboration && (
     firstNameSimilarity >= MEMBER_NAME_SIMILARITY_THRESHOLD
     || lastNameSimilarity >= MEMBER_NAME_SIMILARITY_THRESHOLD
   ));
   if (!similarName) return null;
-  const strongDuplicate = strongCorroboration && strongNameMatch;
+  const strongDuplicate = strongCorroboration && bothNamePartsMatch;
   return {
     member,
-    similarity: fullNameSimilarity,
     matchedExtraFields,
     strongDuplicate: !!strongDuplicate,
   };
@@ -737,7 +733,7 @@ function attachMembresEvents() {
       if (confirmedDuplicates.length) {
         openConfirm(
           'Ajout bloqué — doublon probable',
-          `Un membre au nom ressemblant a le même sexe, la même catégorie et une information complémentaire identique. Aucun ajout n’a été effectué :\n${confirmedDuplicates.map(describeMember).join('\n')}`,
+          `Un membre avec un prénom et un nom ressemblants a le même sexe, la même catégorie et une information complémentaire identique. Aucun ajout n’a été effectué :\n${confirmedDuplicates.map(describeMember).join('\n')}`,
           () => {},
           'Fermer'
         );
@@ -745,7 +741,7 @@ function attachMembresEvents() {
       }
       openConfirm(
         'Homonyme possible',
-        `Des membres ont un nom ressemblant :\n${candidates}\n\nLa combinaison du sexe, de la catégorie et d’une information complémentaire ne confirme pas un doublon. Annulez si c’est la même personne; confirmez pour ajouter cet homonyme.`,
+        `Des membres ont un prénom et un nom ressemblants :\n${candidates}\n\nLa combinaison du sexe, de la catégorie et d’une information complémentaire ne confirme pas un doublon. Annulez si c’est la même personne; confirmez pour ajouter cet homonyme.`,
         addMember,
         'Ajouter comme homonyme'
       );

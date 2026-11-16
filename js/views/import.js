@@ -414,7 +414,7 @@ function renderImportDuplicateReview() {
     return `<li>${escapeHtml(source)} — ${escapeHtml(member.prenom)} ${escapeHtml(member.nom)} (${escapeHtml(details)})${matchingFields}</li>`;
   };
   return `<div>
-    <p style="font-size:13px;color:var(--ink-dim);margin-bottom:14px;">Un doublon est bloqué si le nom ressemble, que le sexe et la catégorie correspondent et qu’au moins une information complémentaire non vide correspond dans le même champ. Les autres ressemblances nécessitent votre décision.</p>
+    <p style="font-size:13px;color:var(--ink-dim);margin-bottom:14px;">Un doublon est bloqué si le prénom ressemble au prénom et le nom au nom (seuil de 0,55 chacun), que le sexe et la catégorie correspondent et qu’au moins une information complémentaire non vide correspond dans le même champ. Les ressemblances partielles nécessitent votre décision.</p>
     <div style="display:grid;gap:12px;max-height:50vh;overflow:auto;">
       ${duplicates.map(duplicate => `<div class="card import-duplicate-review-row" data-row-index="${duplicate.rowIndex}" data-hard-duplicate="${duplicate.hardDuplicate}" style="padding:12px;">
         <strong>Ligne ${duplicate.rowIndex + 2} : ${escapeHtml(duplicate.prenom)} ${escapeHtml(duplicate.nom)}</strong>
