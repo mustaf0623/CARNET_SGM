@@ -26,20 +26,6 @@ function memberNameSimilarity(first, second) {
   const union = firstTrigrams.size + secondTrigrams.size - intersection;
   return union ? intersection / union : 0;
 }
-function memberNamesAreSimilar(prenom, nom, member, hasMatchingExtra) {
-  const fullNameSimilarity = memberNameSimilarity(`${prenom} ${nom}`, `${member.prenom} ${member.nom}`);
-  const firstNameSimilarity = memberNameSimilarity(prenom, member.prenom);
-  const lastNameSimilarity = memberNameSimilarity(nom, member.nom);
-  return fullNameSimilarity >= MEMBER_NAME_SIMILARITY_THRESHOLD
-    || (
-      firstNameSimilarity >= MEMBER_NAME_SIMILARITY_THRESHOLD
-      && lastNameSimilarity >= MEMBER_NAME_SIMILARITY_THRESHOLD
-    )
-    || (hasMatchingExtra && (
-      firstNameSimilarity >= MEMBER_NAME_SIMILARITY_THRESHOLD
-      || lastNameSimilarity >= MEMBER_NAME_SIMILARITY_THRESHOLD
-    ));
-}
 function matchingMemberExtraFields(incomingExtra, existingExtra) {
   const existing = new Map(Object.entries(existingExtra || {})
     .map(([key, value]) => [normalizeMemberName(key), normalizeMemberName(value)]));
@@ -52,18 +38,37 @@ function matchingMemberExtraFields(incomingExtra, existingExtra) {
     return matches;
   }, []);
 }
-function compareMemberForDuplicate(member, prenom, nom, extra) {
+function compareMemberForDuplicate(member, candidate) {
+  const { prenom, nom, extra, sexe, categorie } = candidate;
   if (!normalizeMemberName(prenom) || !normalizeMemberName(nom)) return null;
   const matchedExtraFields = matchingMemberExtraFields(extra, member.extra);
-  if (!memberNamesAreSimilar(prenom, nom, member, matchedExtraFields.length > 0)) return null;
+  const normalizedCategory = normalizeMemberName(categorie);
+  const sameSex = ['H', 'F'].includes(sexe) && member.sexe === sexe;
+  const sameCategory = normalizedCategory
+    && normalizedCategory === normalizeMemberName(member.categorie);
+  const strongCorroboration = sameSex && sameCategory && matchedExtraFields.length > 0;
+  const fullNameSimilarity = memberNameSimilarity(`${prenom} ${nom}`, `${member.prenom} ${member.nom}`);
+  const firstNameSimilarity = memberNameSimilarity(prenom, member.prenom);
+  const lastNameSimilarity = memberNameSimilarity(nom, member.nom);
+  const fullNameMatch = fullNameSimilarity >= MEMBER_NAME_SIMILARITY_THRESHOLD;
+  const bothNamePartsMatch = firstNameSimilarity >= MEMBER_NAME_SIMILARITY_THRESHOLD
+    && lastNameSimilarity >= MEMBER_NAME_SIMILARITY_THRESHOLD;
+  const strongNameMatch = fullNameMatch || bothNamePartsMatch;
+  const similarName = strongNameMatch || (strongCorroboration && (
+    firstNameSimilarity >= MEMBER_NAME_SIMILARITY_THRESHOLD
+    || lastNameSimilarity >= MEMBER_NAME_SIMILARITY_THRESHOLD
+  ));
+  if (!similarName) return null;
+  const strongDuplicate = strongCorroboration && strongNameMatch;
   return {
     member,
-    similarity: memberNameSimilarity(`${prenom} ${nom}`, `${member.prenom} ${member.nom}`),
+    similarity: fullNameSimilarity,
     matchedExtraFields,
+    strongDuplicate: !!strongDuplicate,
   };
 }
-function findSimilarMembers(members, prenom, nom, extra) {
-  return members.map(member => compareMemberForDuplicate(member, prenom, nom, extra)).filter(Boolean);
+function findSimilarMembers(members, candidate) {
+  return members.map(member => compareMemberForDuplicate(member, candidate)).filter(Boolean);
 }
 function normalizeExportSearch(value) {
   return String(value || '').toLowerCase().normalize('NFD')
@@ -189,12 +194,16 @@ function renderMembres() {
         <div class="field" style="margin-bottom:10px;"><label>Nom</label><input type="text" id="newNom" style="width:100%;"></div>
         <div class="field" style="margin-bottom:10px;">
           <label>Sexe</label>
-          <select id="newSexe" style="width:100%;"><option value="H">Homme</option><option value="F">Femme</option></select>
+          <select id="newSexe" style="width:100%;">
+            <option value="" selected disabled>Choisir le sexe</option>
+            <option value="H">Homme</option>
+            <option value="F">Femme</option>
+          </select>
         </div>
         <div class="field" style="margin-bottom:10px;">
           <label>Catégorie</label>
           <select id="newCategorie" style="width:100%;">
-            <option value="">Non définie</option>
+            <option value="" selected disabled>Choisir la catégorie</option>
             <option value="Homme">Homme</option>
             <option value="Femme">Femme</option>
             <option value="Cadet">Cadet</option>
@@ -687,6 +696,10 @@ function attachMembresEvents() {
     const sexe = document.getElementById('newSexe').value;
     const categorie = document.getElementById('newCategorie').value;
     if (!nom || !prenom) { showToast('Nom et prénom requis'); return; }
+    if (!['H', 'F'].includes(sexe) || !normaliseCategorie(categorie)) {
+      showToast('Sexe et catégorie requis');
+      return;
+    }
     const apBtn = document.querySelector('#newMembreType .status-btn.active');
     const ap = !!(apBtn && apBtn.dataset.ap === '1');
     const extra = {};
@@ -708,7 +721,8 @@ function attachMembresEvents() {
       showToast(ap ? 'Membre ponctuel ajouté (AP)' : 'Membre ajouté et pointable dans tous les programmes');
       render();
     };
-    const matchingMembers = findSimilarMembers(d.membres, prenom, nom, extra);
+    const candidate = { prenom, nom, sexe, categorie, extra };
+    const matchingMembers = findSimilarMembers(d.membres, candidate);
     if (matchingMembers.length) {
       const describeMember = match => {
         const member = match.member;
@@ -718,12 +732,12 @@ function attachMembresEvents() {
           : '';
         return `${member.prenom} ${member.nom} — ${details}${matchingFields}`;
       };
-      const confirmedDuplicates = matchingMembers.filter(match => match.matchedExtraFields.length);
+      const confirmedDuplicates = matchingMembers.filter(match => match.strongDuplicate);
       const candidates = matchingMembers.map(describeMember).join('\n');
       if (confirmedDuplicates.length) {
         openConfirm(
           'Ajout bloqué — doublon probable',
-          `Un membre au nom ressemblant possède déjà une information complémentaire identique. Aucun ajout n’a été effectué :\n${confirmedDuplicates.map(describeMember).join('\n')}`,
+          `Un membre au nom ressemblant a le même sexe, la même catégorie et une information complémentaire identique. Aucun ajout n’a été effectué :\n${confirmedDuplicates.map(describeMember).join('\n')}`,
           () => {},
           'Fermer'
         );
@@ -731,7 +745,7 @@ function attachMembresEvents() {
       }
       openConfirm(
         'Homonyme possible',
-        `Des membres ont un nom ressemblant :\n${candidates}\n\nAucune information complémentaire ne correspond. Annulez si c’est la même personne; confirmez pour ajouter cet homonyme.`,
+        `Des membres ont un nom ressemblant :\n${candidates}\n\nLa combinaison du sexe, de la catégorie et d’une information complémentaire ne confirme pas un doublon. Annulez si c’est la même personne; confirmez pour ajouter cet homonyme.`,
         addMember,
         'Ajouter comme homonyme'
       );

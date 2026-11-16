@@ -265,7 +265,7 @@ function renderImportZone() {
       { key: 'sexe', label: 'Sexe' }, { key: 'categorie', label: 'Catégorie' },
     ];
     return `<div>
-      <p style="font-size:13px;color:var(--ink-dim);margin-bottom:14px;">${state.importRows.length} lignes détectées. Vérifiez la correspondance des colonnes avant l’import.</p>
+      <p style="font-size:13px;color:var(--ink-dim);margin-bottom:14px;">${state.importRows.length} lignes détectées. Vérifiez la correspondance des colonnes avant l’import. Prénom, nom, sexe et catégorie sont obligatoires et doivent être associés à des colonnes distinctes.</p>
       <div class="mapping-row"><strong style="font-size:11.5px;text-transform:uppercase;color:var(--ink-faint);">Champ attendu</strong><strong style="font-size:11.5px;text-transform:uppercase;color:var(--ink-faint);">Colonne du fichier</strong></div>
       ${expected.map(f => `<div class="mapping-row">
         <div>${f.label}</div>
@@ -275,7 +275,8 @@ function renderImportZone() {
         </select>
       </div>`).join('')}
       ${renderImportPreviewTable()}
-      <p style="font-size:11.5px;color:var(--ink-faint);margin-top:6px;">Catégorie attendue : Homme / Femme / Cadet / Cadette / Père / Mère. Sert à définir, par programme, quelles catégories ont ce programme comme prioritaire pour le calcul des absences.</p>
+      <p style="font-size:11.5px;color:var(--ink-faint);margin-top:6px;">Sexe attendu : Homme ou Femme (la casse est ignorée). Catégorie attendue : Homme / Femme / Cadet / Cadette / Père / Mère. La casse et les accents ne sont pas pris en compte.</p>
+      <p style="font-size:11.5px;color:var(--ink-faint);margin-top:6px;">La catégorie sert à définir, par programme, quelles catégories ont ce programme comme prioritaire pour le calcul des absences.</p>
       <p style="font-size:12px;color:var(--ink-faint);line-height:1.6;margin-top:14px;">Les autres colonnes du fichier sont conservées pour chaque membre, même si certaines cellules sont vides. Vous pourrez compléter ces informations plus tard depuis la fiche du membre. Une fois importés, ces membres seront pointables dans tous les programmes déjà créés — et automatiquement dans ceux que vous créerez plus tard.</p>
       <div style="display:flex;gap:10px;margin-top:14px;">
         <button class="btn btn-primary" id="confirmImportBtn">Importer</button>
@@ -321,10 +322,46 @@ function importedMemberNames(row, map) {
     nom: String((map.nom ? row[map.nom] : '') || '').trim(),
   };
 }
+function importedMemberSex(raw) {
+  const value = normalizeMemberName(raw);
+  if (value === 'femme') return 'F';
+  if (value === 'homme') return 'H';
+  return '';
+}
+function importedMemberCategory(raw) {
+  const value = normalizeMemberName(raw);
+  const category = ['Homme', 'Femme', 'Cadet', 'Cadette', 'Père', 'Mère']
+    .find(option => normalizeMemberName(option) === value);
+  return category || '';
+}
+function validateMemberImportRequirements(rows, map) {
+  const errors = [];
+  if (!map.prenom) errors.push('Associez la colonne Prénom.');
+  if (!map.nom) errors.push('Associez la colonne Nom.');
+  if (!map.sexe) errors.push('Associez la colonne Sexe.');
+  if (!map.categorie) errors.push('Associez la colonne Catégorie.');
+  const mappedRequiredFields = ['prenom', 'nom', 'sexe', 'categorie']
+    .map(field => map[field]).filter(Boolean);
+  if (new Set(mappedRequiredFields).size !== mappedRequiredFields.length) {
+    errors.push('Associez chaque champ obligatoire à une colonne différente.');
+  }
+  rows.forEach((row, rowIndex) => {
+    const { prenom, nom } = importedMemberNames(row, map);
+    if (!prenom && !nom) return;
+    const rowNumber = rowIndex + 2;
+    if (!prenom || !nom) errors.push(`Ligne ${rowNumber} : prénom et nom sont obligatoires.`);
+    if (map.sexe && !importedMemberSex(row[map.sexe])) {
+      errors.push(`Ligne ${rowNumber} : sexe absent ou non reconnu.`);
+    }
+    if (map.categorie && !importedMemberCategory(row[map.categorie])) {
+      errors.push(`Ligne ${rowNumber} : catégorie absente ou non reconnue.`);
+    }
+  });
+  return errors;
+}
 function importedMemberFromRow(row, map, mappedHeaders) {
   const { prenom, nom } = importedMemberNames(row, map);
   if (!prenom && !nom) return null;
-  const sexeRaw = String((map.sexe ? row[map.sexe] : '') || '').trim().toLowerCase();
   const extra = {};
   Object.keys(row).forEach(header => {
     if (mappedHeaders.has(header)) return;
@@ -334,8 +371,8 @@ function importedMemberFromRow(row, map, mappedHeaders) {
   return {
     prenom,
     nom,
-    sexe: ['f', 'femme', 'female', 'w'].includes(sexeRaw) ? 'F' : 'H',
-    categorie: normaliseCategorie(map.categorie ? row[map.categorie] : ''),
+    sexe: importedMemberSex(map.sexe ? row[map.sexe] : ''),
+    categorie: importedMemberCategory(map.categorie ? row[map.categorie] : ''),
     extra,
   };
 }
@@ -347,7 +384,7 @@ function findImportDuplicateRows(rows, map, members) {
     const member = importedMemberFromRow(row, map, mappedHeaders);
     if (!member) return;
     const matches = candidates.map(candidate => {
-      const match = compareMemberForDuplicate(candidate.member, member.prenom, member.nom, member.extra);
+      const match = compareMemberForDuplicate(candidate.member, member);
       return match ? { ...candidate, ...match } : null;
     }).filter(Boolean);
     if (matches.length) {
@@ -356,8 +393,8 @@ function findImportDuplicateRows(rows, map, members) {
         prenom: member.prenom,
         nom: member.nom,
         matches,
-        hardDuplicate: matches.some(match => match.type === 'existing' && match.matchedExtraFields.length > 0),
-        conditionalDuplicate: matches.some(match => match.type === 'file' && match.matchedExtraFields.length > 0),
+        hardDuplicate: matches.some(match => match.type === 'existing' && match.strongDuplicate),
+        conditionalDuplicate: matches.some(match => match.type === 'file' && match.strongDuplicate),
       });
     }
     candidates.push({ type: 'file', rowIndex, member });
@@ -377,7 +414,7 @@ function renderImportDuplicateReview() {
     return `<li>${escapeHtml(source)} — ${escapeHtml(member.prenom)} ${escapeHtml(member.nom)} (${escapeHtml(details)})${matchingFields}</li>`;
   };
   return `<div>
-    <p style="font-size:13px;color:var(--ink-dim);margin-bottom:14px;">Les noms proches sont signalés. Si une information complémentaire du même champ correspond, la ligne est bloquée; sinon, confirmez s’il s’agit d’un doublon ou d’un homonyme.</p>
+    <p style="font-size:13px;color:var(--ink-dim);margin-bottom:14px;">Un doublon est bloqué si le nom ressemble, que le sexe et la catégorie correspondent et qu’au moins une information complémentaire non vide correspond dans le même champ. Les autres ressemblances nécessitent votre décision.</p>
     <div style="display:grid;gap:12px;max-height:50vh;overflow:auto;">
       ${duplicates.map(duplicate => `<div class="card import-duplicate-review-row" data-row-index="${duplicate.rowIndex}" data-hard-duplicate="${duplicate.hardDuplicate}" style="padding:12px;">
         <strong>Ligne ${duplicate.rowIndex + 2} : ${escapeHtml(duplicate.prenom)} ${escapeHtml(duplicate.nom)}</strong>
@@ -385,9 +422,9 @@ function renderImportDuplicateReview() {
           <ul style="margin:5px 0 0;padding-left:20px;">${duplicate.matches.map(matchLabel).join('')}</ul>
         </div>
         ${duplicate.hardDuplicate
-          ? '<p style="font-size:12px;color:var(--terracotta-dim);font-weight:700;">Ajout bloqué : une information complémentaire correspond à la fiche existante.</p>'
+          ? '<p style="font-size:12px;color:var(--terracotta-dim);font-weight:700;">Ajout bloqué : nom, sexe, catégorie et information complémentaire correspondent à la fiche existante.</p>'
           : `${duplicate.conditionalDuplicate
-            ? '<p style="font-size:12px;color:var(--terracotta-dim);">Si la ligne correspondante est importée, cette ligne sera bloquée car une information complémentaire correspond.</p>'
+            ? '<p style="font-size:12px;color:var(--terracotta-dim);">Si la ligne correspondante est importée, cette ligne sera bloquée car les critères de nom, sexe, catégorie et information complémentaire correspondent.</p>'
             : ''}
             <label style="display:block;font-size:12.5px;margin:6px 0;"><input type="radio" class="importDuplicateDecision" name="importDuplicate${duplicate.rowIndex}" data-row-index="${duplicate.rowIndex}" value="duplicate"> Même personne — ignorer cette ligne</label>
             <label style="display:block;font-size:12.5px;"><input type="radio" class="importDuplicateDecision" name="importDuplicate${duplicate.rowIndex}" data-row-index="${duplicate.rowIndex}" value="homonym"> Homonyme — importer cette ligne</label>`}
@@ -427,6 +464,11 @@ function handleFile(e) {
 async function confirmImport() {
   const d = state.data;
   const map = state.importMapping;
+  const requirementErrors = validateMemberImportRequirements(state.importRows, map);
+  if (requirementErrors.length) {
+    showToast(`Import impossible : ${requirementErrors[0]}`);
+    return;
+  }
   const duplicates = findImportDuplicateRows(state.importRows, map, d.membres);
   if (state.importStep === 1 && duplicates.length) {
     state.importStep = 2;
@@ -456,8 +498,8 @@ async function confirmImport() {
     if (skippedRows.has(rowIndex)) return;
     const member = importedMemberFromRow(row, map, mappedHeaders);
     if (!member) return;
-    const confirmedDuplicate = findSimilarMembers(d.membres, member.prenom, member.nom, member.extra)
-      .find(match => match.matchedExtraFields.length);
+    const confirmedDuplicate = findSimilarMembers(d.membres, member)
+      .find(match => match.strongDuplicate);
     if (confirmedDuplicate) {
       blockedRows.add(rowIndex);
       return;

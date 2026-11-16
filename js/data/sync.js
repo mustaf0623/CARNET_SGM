@@ -365,7 +365,7 @@ async function rejectDuplicateMemberWrite(error) {
   if (state.tab === 'membres') render();
   const candidateName = escapeHtml([details.prenom, details.nom].filter(Boolean).join(' ') || 'un membre');
   const matchingField = escapeHtml(details.field || 'information complémentaire');
-  showToast(`Ajout bloqué : ${candidateName} correspond à la fiche existante (information : ${matchingField}).`);
+  showToast(`Ajout bloqué : ${candidateName} correspond à la fiche existante (nom, sexe, catégorie et information : ${matchingField}).`);
   return true;
 }
 
