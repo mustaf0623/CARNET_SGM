@@ -26,6 +26,20 @@ function memberNameSimilarity(first, second) {
   const union = firstTrigrams.size + secondTrigrams.size - intersection;
   return union ? intersection / union : 0;
 }
+function memberNamesAreSimilar(prenom, nom, member, hasMatchingExtra) {
+  const fullNameSimilarity = memberNameSimilarity(`${prenom} ${nom}`, `${member.prenom} ${member.nom}`);
+  const firstNameSimilarity = memberNameSimilarity(prenom, member.prenom);
+  const lastNameSimilarity = memberNameSimilarity(nom, member.nom);
+  return fullNameSimilarity >= MEMBER_NAME_SIMILARITY_THRESHOLD
+    || (
+      firstNameSimilarity >= MEMBER_NAME_SIMILARITY_THRESHOLD
+      && lastNameSimilarity >= MEMBER_NAME_SIMILARITY_THRESHOLD
+    )
+    || (hasMatchingExtra && (
+      firstNameSimilarity >= MEMBER_NAME_SIMILARITY_THRESHOLD
+      || lastNameSimilarity >= MEMBER_NAME_SIMILARITY_THRESHOLD
+    ));
+}
 function matchingMemberExtraFields(incomingExtra, existingExtra) {
   const existing = new Map(Object.entries(existingExtra || {})
     .map(([key, value]) => [normalizeMemberName(key), normalizeMemberName(value)]));
@@ -40,12 +54,12 @@ function matchingMemberExtraFields(incomingExtra, existingExtra) {
 }
 function compareMemberForDuplicate(member, prenom, nom, extra) {
   if (!normalizeMemberName(prenom) || !normalizeMemberName(nom)) return null;
-  const similarity = memberNameSimilarity(`${prenom} ${nom}`, `${member.prenom} ${member.nom}`);
-  if (similarity < MEMBER_NAME_SIMILARITY_THRESHOLD) return null;
+  const matchedExtraFields = matchingMemberExtraFields(extra, member.extra);
+  if (!memberNamesAreSimilar(prenom, nom, member, matchedExtraFields.length > 0)) return null;
   return {
     member,
-    similarity,
-    matchedExtraFields: matchingMemberExtraFields(extra, member.extra),
+    similarity: memberNameSimilarity(`${prenom} ${nom}`, `${member.prenom} ${member.nom}`),
+    matchedExtraFields,
   };
 }
 function findSimilarMembers(members, prenom, nom, extra) {

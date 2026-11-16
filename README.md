@@ -59,11 +59,12 @@ du projet avant de déployer l'application. Le script est rejouable et ajoute no
 protection contre l'enregistrement de deux pointages identiques pour une même séance.
 Pour protéger aussi la table des membres côté base, exécuter une fois
 `supabase-member-duplicate-guard.sql` dans le SQL Editor après `supabase-setup.sql`. Le trigger
-bloque une écriture quand la similarité du nom atteint 0,55 et qu'au moins une information
-complémentaire non vide correspond dans le même champ. L'application signale également le membre
-candidat avant l'enregistrement; les homonymes sans information complémentaire commune restent
-confirmables. Le contrôle utilise un verrou transactionnel afin d'éviter que deux inscriptions
-concurrentes échappent à la vérification.
+bloque une écriture quand la similarité du nom complet, ou d'un des champs prénom/nom corroboré
+par une information complémentaire, atteint 0,55. L'information doit être non vide et correspondre
+dans le même champ.
+L'application signale également le membre candidat avant l'enregistrement; les homonymes sans
+information complémentaire commune restent confirmables. Le contrôle utilise un verrou
+transactionnel afin d'éviter que deux inscriptions concurrentes échappent à la vérification.
 Pour le module Bureau, réexécuter également `bureau-setup.sql` afin d'ajouter les colonnes
 utilisées pour les réunions et les procès-verbaux.
 
