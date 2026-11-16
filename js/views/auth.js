@@ -11,8 +11,11 @@ function renderAuthScreen(errorMsg) {
       ${canGoBack ? `<button id="authBackBtn" title="Retour à l’app" style="position:absolute;top:14px;right:14px;width:30px;height:30px;border-radius:50%;border:1px solid var(--line);background:var(--card-2);color:var(--ink-dim);font-size:16px;line-height:1;cursor:pointer;">×</button>` : ''}
       <div class="onboard-mark">${ICONS.mark}</div>
       <h2>${authMode === 'login' ? 'Se connecter' : 'Créer un compte'}</h2>
-      <p>Connectez-vous pour retrouver les mêmes données sur tous vos appareils.</p>
+      <p>${authMode === 'login'
+        ? 'Connectez-vous pour retrouver les mêmes données sur tous vos appareils.'
+        : 'Comment devons-nous vous appeler ? Ce nom apparaîtra comme signataire sur vos rapports générés.'}</p>
       ${errorMsg ? `<p style="color:var(--terracotta);font-size:12.5px;margin-top:-10px;">${escapeHtml(errorMsg)}</p>` : ''}
+      ${authMode === 'signup' ? '<input type="text" id="authName" placeholder="Votre nom complet" autocomplete="name" style="margin-bottom:10px;" />' : ''}
       <input type="text" id="authEmail" placeholder="Adresse e-mail" autocomplete="username" style="margin-bottom:10px;" />
       <input type="password" id="authPassword" placeholder="Mot de passe" autocomplete="current-password" />
       <button class="btn btn-primary" id="authSubmitBtn" style="width:100%;justify-content:center;margin-top:14px;margin-bottom:10px;">${authMode === 'login' ? 'Se connecter' : 'Créer le compte'}</button>
@@ -47,8 +50,10 @@ function renderAccountAccessScreen(title, message) {
   document.getElementById('accessSignOutBtn').addEventListener('click', signOutSupabase);
 }
 async function submitAuth() {
+  const name = authMode === 'signup' ? document.getElementById('authName').value.trim() : '';
   const email = document.getElementById('authEmail').value.trim();
   const password = document.getElementById('authPassword').value;
+  if (authMode === 'signup' && !name) { renderAuthScreen('Merci de renseigner le nom à afficher.'); return; }
   if (!email || !password) { renderAuthScreen('Merci de renseigner un e-mail et un mot de passe.'); return; }
   const btn = document.getElementById('authSubmitBtn');
   btn.disabled = true; btn.textContent = 'Un instant…';
@@ -63,7 +68,7 @@ async function submitAuth() {
       : () => sb.auth.signUp({
         email,
         password,
-        options: { emailRedirectTo: redirectTo, data: { name: email.split('@')[0] } },
+        options: { emailRedirectTo: redirectTo, data: { name } },
       });
     const { data, error } = await fn();
     if (error) { renderAuthScreen(error.message); return; }
